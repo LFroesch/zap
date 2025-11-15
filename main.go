@@ -65,7 +65,7 @@ type model struct {
 	// Performance
 	sortedCache   []models.ConfigEntry
 	cacheValid    bool
-	sortByRecent  bool
+	sortMode      int // 0=Project, 1=Recent, 2=Name, 3=Type, 4=Path
 }
 
 type statusMsg struct {
@@ -103,7 +103,7 @@ func main() {
 		maxCols:      5,
 		deleteIndex:  -1,
 		cacheValid:   false,
-		sortByRecent: false,
+		sortMode:     0, // Start with Project sort
 	}
 
 	// Define all possible columns
@@ -332,13 +332,13 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, showStatus("🎯 Fuzzy find mode")
 
 	case "s":
-		m.sortByRecent = !m.sortByRecent
+		// Cycle through sort modes: 0=Project, 1=Recent, 2=Name, 3=Type, 4=Path
+		m.sortMode = (m.sortMode + 1) % 5
 		m.cacheValid = false
 		m.updateTable()
-		if m.sortByRecent {
-			return m, showStatus("📊 Sorted by recently opened")
-		}
-		return m, showStatus("📊 Sorted by project")
+
+		sortNames := []string{"Project", "Recent", "Name", "Type", "Path"}
+		return m, showStatus(fmt.Sprintf("📊 Sorted by %s", sortNames[m.sortMode]))
 
 	case "e":
 		return m, m.startEdit()
@@ -595,9 +595,18 @@ func (m *model) getSortedConfigs() []models.ConfigEntry {
 	}
 
 	var sorted []models.ConfigEntry
-	if m.sortByRecent {
+	switch m.sortMode {
+	case 0: // Project
+		sorted = storage.SortConfigs(m.configs)
+	case 1: // Recent
 		sorted = storage.SortByRecentlyOpened(m.configs)
-	} else {
+	case 2: // Name
+		sorted = storage.SortByName(m.configs)
+	case 3: // Type
+		sorted = storage.SortByType(m.configs)
+	case 4: // Path
+		sorted = storage.SortByPath(m.configs)
+	default:
 		sorted = storage.SortConfigs(m.configs)
 	}
 
@@ -682,8 +691,8 @@ func (m *model) updateTable() {
 			displayProject = "General"
 		}
 
-		// Add project header (only in non-search mode or when not sorting by recent)
-		if !m.sortByRecent && displayProject != lastProject {
+		// Add project header only when sorting by project (mode 0)
+		if m.sortMode == 0 && displayProject != lastProject {
 			projectHeader := fmt.Sprintf("📂 %s", displayProject)
 			headerRow := make(table.Row, len(visibleColumns))
 			headerRow[0] = projectHeader
@@ -693,6 +702,25 @@ func (m *model) updateTable() {
 			rows = append(rows, headerRow)
 			m.configIndices = append(m.configIndices, -1)
 			lastProject = displayProject
+		}
+
+		// Add type header when sorting by type (mode 3)
+		if m.sortMode == 3 {
+			displayType := config.Type
+			if displayType == "" {
+				displayType = "unknown"
+			}
+			if displayType != lastProject { // Reuse lastProject var to track last type
+				typeHeader := fmt.Sprintf("📄 %s", displayType)
+				headerRow := make(table.Row, len(visibleColumns))
+				headerRow[0] = typeHeader
+				for i := 1; i < len(headerRow); i++ {
+					headerRow[i] = ""
+				}
+				rows = append(rows, headerRow)
+				m.configIndices = append(m.configIndices, -1)
+				lastProject = displayType
+			}
 		}
 
 		// Build row with status indicators
@@ -871,8 +899,13 @@ func (m model) View() string {
 		return ui.HelpScreen(m.width, m.height)
 	}
 
-	// Normal view
-	header := ui.TitleStyle.Render("⚡ zap - File Registry")
+	// Build header with sort indicator
+	sortIcons := []string{"📂", "🕐", "🔤", "📄", "📁"}
+	sortNames := []string{"Project", "Recent", "Name", "Type", "Path"}
+	sortIndicator := fmt.Sprintf(" [%s %s]", sortIcons[m.sortMode], sortNames[m.sortMode])
+
+	header := ui.TitleStyle.Render("⚡ zap - File Registry") +
+		ui.InfoStyle.Render(sortIndicator)
 
 	// Empty state
 	if len(m.configs) == 0 {

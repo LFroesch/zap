@@ -31,13 +31,14 @@ zap is your personal file shortcut manager on steroids. Instead of hunting throu
 ### Smart Features
 - **Auto-detect File Type** - Automatically detects file type from extension
 - **Duplicate Prevention** - Prevents registering the same file twice
-- **Recently Opened Tracking** - Press `s` to toggle sort by recently opened
+- **Recently Opened Tracking** - Tracks when you open files for smart sorting
 - **Path Validation** - Shows broken file paths with ❌ indicator
 - **Atomic Saves** - Config changes are saved atomically to prevent corruption
 
 ### Organization & Workflow
-- **Sorted Views** - Sort by project (default) or recently opened
-- **Visual Project Headers** - Clear project groupings with 📂 headers
+- **5 Sort Modes** - Sort by Project, Recent, Name, Type, or Path (press `s` to cycle)
+- **Visual Indicators** - Persistent sort indicator in header shows current mode
+- **Smart Grouping** - Project mode shows 📂 headers, Type mode shows 📄 headers
 - **Status Icons** - ✓ for opened files, ❌ for broken paths
 - **Quick Edit Mode** - Tab through fields when editing metadata
 - **Confirmation Prompts** - Safety confirmation before deleting files
@@ -105,7 +106,7 @@ zap
 - `enter` - Apply search filter
 
 #### Sorting
-- `s` - Toggle sort (project/recent)
+- `s` - Cycle through sort modes (Project → Recent → Name → Type → Path)
 
 #### System
 - `?` - Show help screen
@@ -118,6 +119,18 @@ When editing or adding a file:
 - `shift+tab` - Previous field
 - `enter` - Save changes
 - `esc` - Cancel (removes unsaved new entries)
+
+### Sort Modes
+
+Press `s` to cycle through 5 different sorting options:
+
+1. **📂 Project** - Groups files by project with headers (default)
+2. **🕐 Recent** - Shows most recently opened files first
+3. **🔤 Name** - Alphabetical by file name
+4. **📄 Type** - Groups by file type (json, yaml, etc.) with headers
+5. **📁 Path** - Alphabetical by full file path
+
+The current sort mode is always shown in the header: `⚡ zap - File Registry [📂 Project]`
 
 ## Examples
 
@@ -228,8 +241,9 @@ MIT
 2. **Add good descriptions**: The description field is searchable - use it!
 3. **Organize by project**: Group related files by project for better organization
 4. **Leverage fuzzy find**: `Ctrl+F` then type just the key letters (e.g., "dc" finds "docker-compose.yml")
-5. **Check recently opened**: Press `s` to see your most-used files at the top
-6. **Use projects wisely**: Group files by project, not by type
+5. **Use sort modes**: Press `s` to cycle through 5 sort options - find the view that works best for you
+6. **Check recently opened**: Use Recent sort mode to see your most-used files at the top
+7. **Group by type**: Type sort mode is great for finding all configs or all scripts quickly
 
 ---
 
