@@ -1,15 +1,17 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
+
+	"configly/internal/editor"
+	"configly/internal/models"
+	"configly/internal/storage"
+	"configly/internal/ui"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -17,16 +19,53 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type ConfigEntry struct {
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	Type        string `json:"type"`        // json, yaml, toml, ini, txt
-	Project     string `json:"project"`     // project association
-	Description string `json:"description"` // brief description
-}
+// ViewMode represents the different view states
+type ViewMode int
 
-type ConfigManager struct {
-	Configs []ConfigEntry `json:"configs"`
+const (
+	ModeNormal ViewMode = iota
+	ModeEdit
+	ModeAdd
+	ModeSearch
+	ModeHelp
+	ModeConfirmDelete
+)
+
+type model struct {
+	configs       []models.ConfigEntry
+	table         table.Model
+	storage       *storage.Storage
+	width         int
+	height        int
+
+	// Mode management
+	mode          ViewMode
+
+	// Edit mode
+	editRow       int
+	editCol       int
+	textInput     textinput.Model
+
+	// Search mode
+	searchInput   textinput.Model
+	searchQuery   string
+	fuzzyMode     bool
+
+	// Delete confirmation
+	deleteIndex   int
+
+	// UI state
+	statusMsg     string
+	statusExpiry  time.Time
+	scrollOffset  int
+	maxCols       int
+	configIndices []int
+	allColumns    []table.Column
+
+	// Performance
+	sortedCache   []models.ConfigEntry
+	cacheValid    bool
+	sortByRecent  bool
 }
 
 type statusMsg struct {
@@ -39,29 +78,6 @@ func showStatus(msg string) tea.Cmd {
 	}
 }
 
-type model struct {
-	configs       []ConfigEntry
-	table         table.Model
-	editMode      bool
-	editRow       int
-	editCol       int
-	textInput     textinput.Model
-	configFile    string
-	width         int
-	height        int
-	statusMsg     string
-	statusExpiry  time.Time
-	scrollOffset  int            // For horizontal scrolling
-	maxCols       int            // Maximum visible columns
-	configIndices []int          // Maps display row to actual config index (-1 for headers)
-	allColumns    []table.Column // Store all possible columns
-	confirmDelete bool           // Confirmation mode for deletion
-	deleteIndex   int            // Index of config to delete
-	viewMode      bool           // View/edit config content mode
-	viewContent   string         // Content of config being viewed
-	viewPath      string         // Path of config being viewed
-}
-
 func main() {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -69,19 +85,25 @@ func main() {
 	}
 	configFile := filepath.Join(homeDir, ".config", "zap", "zap-registry.json")
 
+	store := storage.New(configFile)
+	configs, err := store.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configs: %v", err)
+	}
+
 	m := model{
-		configs:       loadConfigs(configFile),
-		configFile:    configFile,
-		width:         100,
-		height:        24,
-		editMode:      false,
-		editRow:       -1,
-		editCol:       -1,
-		scrollOffset:  0,
-		maxCols:       5,
-		confirmDelete: false,
-		deleteIndex:   -1,
-		viewMode:      false,
+		configs:      configs,
+		storage:      store,
+		width:        100,
+		height:       24,
+		mode:         ModeNormal,
+		editRow:      -1,
+		editCol:      -1,
+		scrollOffset: 0,
+		maxCols:      5,
+		deleteIndex:  -1,
+		cacheValid:   false,
+		sortByRecent: false,
 	}
 
 	// Define all possible columns
@@ -93,13 +115,17 @@ func main() {
 		{Title: "Description", Width: 30},
 	}
 
-	// Initialize text input for editing
+	// Initialize text inputs
 	m.textInput = textinput.New()
 	m.textInput.CharLimit = 300
 
-	// Initialize table with initial columns
+	m.searchInput = textinput.New()
+	m.searchInput.Placeholder = "Type to search..."
+	m.searchInput.CharLimit = 100
+
+	// Initialize table
 	t := table.New(
-		table.WithColumns(m.allColumns[:4]), // Start with first 4 columns
+		table.WithColumns(m.allColumns[:4]),
 		table.WithFocused(true),
 		table.WithHeight(10),
 	)
@@ -107,17 +133,17 @@ func main() {
 	s := table.DefaultStyles()
 	s.Header = s.Header.
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("#374151")).
+		BorderForeground(lipgloss.Color(ui.ColorBorder)).
 		BorderBottom(true).
 		Bold(true).
-		Foreground(lipgloss.Color("#F3F4F6")).
-		Background(lipgloss.Color("#1F2937"))
+		Foreground(lipgloss.Color(ui.ColorTextLight)).
+		Background(lipgloss.Color(ui.ColorBg))
 	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("#F3F4F6")).
-		Background(lipgloss.Color("#7C3AED")).
+		Foreground(lipgloss.Color(ui.ColorTextLight)).
+		Background(lipgloss.Color(ui.ColorPrimary)).
 		Bold(true)
 	s.Cell = s.Cell.
-		Foreground(lipgloss.Color("#E5E7EB"))
+		Foreground(lipgloss.Color(ui.ColorText))
 	t.SetStyles(s)
 
 	m.table = t
@@ -130,66 +156,555 @@ func main() {
 	}
 }
 
-func loadConfigs(configFile string) []ConfigEntry {
-	var manager ConfigManager
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		// Create default config directory
-		os.MkdirAll(filepath.Dir(configFile), 0755)
-		return []ConfigEntry{}
-	}
-	json.Unmarshal(data, &manager)
-	return manager.Configs
+func (m model) Init() tea.Cmd {
+	return tea.SetWindowTitle("zap - File Registry")
 }
 
-func (m *model) saveConfigs() {
-	manager := ConfigManager{Configs: m.configs}
-	data, err := json.MarshalIndent(manager, "", "  ")
-	if err != nil {
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle editor finished messages globally
+	if statusStr, ok := editor.HandleEditorFinished(msg); ok {
+		return m, showStatus(statusStr)
+	}
+
+	switch msg := msg.(type) {
+	case statusMsg:
+		m.statusMsg = msg.message
+		m.statusExpiry = time.Now().Add(3 * time.Second)
+		return m, nil
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.adjustLayout()
+		m.updateTable()
+		return m, nil
+
+	case tea.KeyMsg:
+		switch m.mode {
+		case ModeHelp:
+			return m.updateHelp(msg)
+		case ModeEdit, ModeAdd:
+			return m.updateEdit(msg)
+		case ModeSearch:
+			return m.updateSearch(msg)
+		case ModeConfirmDelete:
+			return m.updateDeleteConfirm(msg)
+		default:
+			return m.updateNormal(msg)
+		}
+	}
+
+	// Let table handle mouse events when in normal mode
+	if m.mode == ModeNormal {
+		var cmd tea.Cmd
+		m.table, cmd = m.table.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+func (m model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Any key exits help
+	m.mode = ModeNormal
+	return m, nil
+}
+
+func (m model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		if m.deleteIndex >= 0 && m.deleteIndex < len(m.configs) {
+			configName := m.configs[m.deleteIndex].Name
+			m.configs = append(m.configs[:m.deleteIndex], m.configs[m.deleteIndex+1:]...)
+			if err := m.storage.Save(m.configs); err != nil {
+				m.mode = ModeNormal
+				return m, showStatus(fmt.Sprintf("❌ Failed to save: %v", err))
+			}
+			m.cacheValid = false
+			m.updateTable()
+			m.mode = ModeNormal
+			m.deleteIndex = -1
+			return m, showStatus(fmt.Sprintf("🗑️  Deleted %s", configName))
+		}
+		m.mode = ModeNormal
+		m.deleteIndex = -1
+		return m, nil
+	case "n", "N", "esc":
+		m.mode = ModeNormal
+		m.deleteIndex = -1
+		return m, showStatus("❌ Deletion cancelled")
+	}
+	return m, nil
+}
+
+func (m model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg.String() {
+	case "esc":
+		m.mode = ModeNormal
+		m.searchQuery = ""
+		m.fuzzyMode = false
+		m.searchInput.SetValue("")
+		m.searchInput.Blur()
+		m.cacheValid = false
+		m.updateTable()
+		return m, showStatus("🔍 Search cleared")
+	case "enter":
+		m.mode = ModeNormal
+		m.searchQuery = m.searchInput.Value()
+		m.searchInput.Blur()
+		m.cacheValid = false
+		m.updateTable()
+		if m.searchQuery != "" {
+			matchCount := m.getFilteredConfigsCount()
+			return m, showStatus(fmt.Sprintf("🔍 Found %d matches", matchCount))
+		}
+		return m, nil
+	}
+
+	m.searchInput, cmd = m.searchInput.Update(msg)
+	// Live update search results
+	m.searchQuery = m.searchInput.Value()
+	m.cacheValid = false
+	m.updateTable()
+	return m, cmd
+}
+
+func (m model) updateEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg.String() {
+	case "esc":
+		m.cancelEdit()
+		return m, nil
+	case "enter":
+		if err := m.saveEdit(); err != nil {
+			return m, showStatus(fmt.Sprintf("❌ Failed to save: %v", err))
+		}
+		m.cancelEdit()
+		if m.mode == ModeAdd {
+			return m, showStatus("✅ File added")
+		}
+		return m, showStatus("✅ File updated")
+	case "tab":
+		if err := m.saveEdit(); err != nil {
+			return m, showStatus(fmt.Sprintf("❌ Failed to save: %v", err))
+		}
+		m.editCol = (m.editCol + 1) % 5
+		m.loadEditField()
+		return m, nil
+	case "shift+tab":
+		if err := m.saveEdit(); err != nil {
+			return m, showStatus(fmt.Sprintf("❌ Failed to save: %v", err))
+		}
+		m.editCol = (m.editCol - 1 + 5) % 5
+		m.loadEditField()
+		return m, nil
+	}
+
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
+func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+
+	case "?":
+		m.mode = ModeHelp
+		return m, nil
+
+	case "/":
+		m.mode = ModeSearch
+		m.fuzzyMode = false
+		m.searchInput.Focus()
+		m.searchInput.SetValue(m.searchQuery)
+		return m, showStatus("🔍 Search mode (press Enter to apply, Esc to cancel)")
+
+	case "ctrl+f":
+		m.mode = ModeSearch
+		m.fuzzyMode = true
+		m.searchInput.Focus()
+		m.searchInput.Placeholder = "Fuzzy find..."
+		m.searchInput.SetValue(m.searchQuery)
+		return m, showStatus("🎯 Fuzzy find mode")
+
+	case "s":
+		m.sortByRecent = !m.sortByRecent
+		m.cacheValid = false
+		m.updateTable()
+		if m.sortByRecent {
+			return m, showStatus("📊 Sorted by recently opened")
+		}
+		return m, showStatus("📊 Sorted by project")
+
+	case "e":
+		return m, m.startEdit()
+
+	case "n", "a":
+		return m, m.addNewConfig()
+
+	case "d", "delete":
+		if len(m.configs) > 0 {
+			displayIndex := m.table.Cursor()
+			originalIndex := m.getOriginalIndexByDisplayIndex(displayIndex)
+			if originalIndex == -1 {
+				return m, nil
+			}
+			m.mode = ModeConfirmDelete
+			m.deleteIndex = originalIndex
+			return m, showStatus(fmt.Sprintf("❓ Delete '%s'? (y/n)", m.configs[originalIndex].Name))
+		}
+		return m, nil
+
+	case " ", "enter":
+		if len(m.configs) > 0 {
+			displayIndex := m.table.Cursor()
+			config := m.getConfigByDisplayIndex(displayIndex)
+			if config != nil {
+				// Update last opened time
+				for i := range m.configs {
+					if m.configs[i].Equals(config) {
+						m.configs[i].LastOpened = time.Now()
+						m.storage.Save(m.configs)
+						m.cacheValid = false
+						break
+					}
+				}
+				return m, editor.OpenConfig(*config)
+			}
+		}
+		return m, nil
+
+	case "r":
+		configs, err := m.storage.Load()
+		if err != nil {
+			return m, showStatus(fmt.Sprintf("❌ Failed to reload: %v", err))
+		}
+		m.configs = configs
+		m.cacheValid = false
+		m.updateTable()
+		return m, showStatus("🔄 Refreshed")
+
+	case "left", "h":
+		if m.scrollOffset > 0 {
+			m.scrollOffset--
+			m.adjustLayout()
+			m.updateTable()
+		}
+		return m, nil
+
+	case "right", "l":
+		maxOffset := m.maxCols - len(m.table.Columns())
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		if m.scrollOffset < maxOffset {
+			m.scrollOffset++
+			m.adjustLayout()
+			m.updateTable()
+		}
+		return m, nil
+
+	case "k", "up":
+		var cmd tea.Cmd
+		m.table, cmd = m.table.Update(msg)
+		return m, cmd
+
+	case "j", "down":
+		var cmd tea.Cmd
+		m.table, cmd = m.table.Update(msg)
+		return m, cmd
+
+	case "g", "home":
+		m.table.SetCursor(0)
+		return m, nil
+
+	case "G", "end":
+		m.table.SetCursor(len(m.table.Rows()) - 1)
+		return m, nil
+
+	case "pageup", "ctrl+u":
+		cursor := m.table.Cursor()
+		pageSize := m.table.Height()
+		newCursor := cursor - pageSize
+		if newCursor < 0 {
+			newCursor = 0
+		}
+		m.table.SetCursor(newCursor)
+		return m, nil
+
+	case "pagedown", "ctrl+d":
+		cursor := m.table.Cursor()
+		pageSize := m.table.Height()
+		newCursor := cursor + pageSize
+		maxCursor := len(m.table.Rows()) - 1
+		if newCursor > maxCursor {
+			newCursor = maxCursor
+		}
+		m.table.SetCursor(newCursor)
+		return m, nil
+
+	default:
+		var cmd tea.Cmd
+		m.table, cmd = m.table.Update(msg)
+		return m, cmd
+	}
+}
+
+func (m *model) startEdit() tea.Cmd {
+	if len(m.configs) == 0 {
+		return showStatus("❌ No files to edit")
+	}
+
+	displayIndex := m.table.Cursor()
+	m.editRow = m.getOriginalIndexByDisplayIndex(displayIndex)
+	if m.editRow == -1 {
+		return showStatus("❌ Invalid selection")
+	}
+
+	m.mode = ModeEdit
+	m.editCol = 0
+	m.loadEditField()
+	m.textInput.Focus()
+	return nil
+}
+
+func (m *model) addNewConfig() tea.Cmd {
+	newConfig := models.ConfigEntry{
+		Name:        "New File",
+		Path:        "~/path/to/file",
+		Type:        "txt",
+		Project:     "",
+		Description: "File description",
+	}
+
+	m.configs = append(m.configs, newConfig)
+	m.cacheValid = false
+	m.mode = ModeAdd
+	m.editRow = len(m.configs) - 1
+	m.editCol = 0
+	m.loadEditField()
+	m.textInput.Focus()
+	m.updateTable()
+
+	// Move cursor to new entry
+	displayIndex := m.findConfigDisplayIndex(newConfig)
+	if displayIndex != -1 {
+		m.table.SetCursor(displayIndex)
+	}
+
+	return showStatus("➕ Adding new file (Tab to next field, Enter to save)")
+}
+
+func (m *model) loadEditField() {
+	if m.editRow < 0 || m.editRow >= len(m.configs) {
 		return
 	}
-	os.MkdirAll(filepath.Dir(m.configFile), 0755)
-	os.WriteFile(m.configFile, data, 0644)
+
+	config := m.configs[m.editRow]
+	var value string
+	switch m.editCol {
+	case 0:
+		value = config.Name
+	case 1:
+		value = config.Project
+	case 2:
+		value = config.Type
+	case 3:
+		value = config.Path
+	case 4:
+		value = config.Description
+	}
+
+	m.textInput.SetValue(value)
+	m.textInput.SetCursor(len(value))
+}
+
+func (m *model) saveEdit() error {
+	if m.editRow < 0 || m.editRow >= len(m.configs) {
+		return fmt.Errorf("invalid edit row")
+	}
+
+	value := strings.TrimSpace(m.textInput.Value())
+
+	switch m.editCol {
+	case 0: // Name
+		if value == "" {
+			return fmt.Errorf("name cannot be empty")
+		}
+		m.configs[m.editRow].Name = value
+	case 1: // Project
+		m.configs[m.editRow].Project = value
+	case 2: // Type
+		m.configs[m.editRow].Type = value
+	case 3: // Path
+		if value == "" {
+			return fmt.Errorf("path cannot be empty")
+		}
+		expandedPath := editor.ExpandPath(value)
+
+		// Check for duplicates (only when adding or changing path)
+		if m.mode == ModeAdd || m.configs[m.editRow].Path != expandedPath {
+			if dup := storage.FindDuplicates(m.configs, expandedPath); dup != nil && !dup.Equals(&m.configs[m.editRow]) {
+				return fmt.Errorf("file already registered as '%s'", dup.Name)
+			}
+		}
+
+		m.configs[m.editRow].Path = expandedPath
+
+		// Auto-detect file type if not set or is default
+		if m.configs[m.editRow].Type == "" || m.configs[m.editRow].Type == "txt" {
+			m.configs[m.editRow].Type = models.DetectFileType(expandedPath)
+		}
+	case 4: // Description
+		m.configs[m.editRow].Description = value
+	}
+
+	if err := m.storage.Save(m.configs); err != nil {
+		return err
+	}
+
+	m.cacheValid = false
+	m.updateTable()
+	return nil
+}
+
+func (m *model) cancelEdit() {
+	// If we were adding and canceled, remove the entry
+	if m.mode == ModeAdd && m.editRow >= 0 && m.editRow < len(m.configs) {
+		if m.configs[m.editRow].Path == "~/path/to/file" {
+			m.configs = append(m.configs[:m.editRow], m.configs[m.editRow+1:]...)
+			m.cacheValid = false
+		}
+	}
+
+	m.mode = ModeNormal
+	m.editRow = -1
+	m.editCol = -1
+	m.textInput.Blur()
+	m.textInput.SetValue("")
+	m.updateTable()
+}
+
+func (m *model) getSortedConfigs() []models.ConfigEntry {
+	if m.cacheValid && m.sortedCache != nil {
+		return m.sortedCache
+	}
+
+	var sorted []models.ConfigEntry
+	if m.sortByRecent {
+		sorted = storage.SortByRecentlyOpened(m.configs)
+	} else {
+		sorted = storage.SortConfigs(m.configs)
+	}
+
+	m.sortedCache = sorted
+	m.cacheValid = true
+	return sorted
+}
+
+func (m *model) getFilteredConfigs() []models.ConfigEntry {
+	sorted := m.getSortedConfigs()
+
+	if m.searchQuery == "" {
+		return sorted
+	}
+
+	query := strings.ToLower(m.searchQuery)
+	var filtered []models.ConfigEntry
+
+	for _, config := range sorted {
+		if m.matchesSearch(config, query) {
+			filtered = append(filtered, config)
+		}
+	}
+
+	return filtered
+}
+
+func (m *model) getFilteredConfigsCount() int {
+	return len(m.getFilteredConfigs())
+}
+
+func (m *model) matchesSearch(config models.ConfigEntry, query string) bool {
+	if m.fuzzyMode {
+		return fuzzyMatch(query, strings.ToLower(config.Name)) ||
+			fuzzyMatch(query, strings.ToLower(config.Project)) ||
+			fuzzyMatch(query, strings.ToLower(config.Path)) ||
+			fuzzyMatch(query, strings.ToLower(config.Description))
+	}
+
+	// Normal substring search
+	return strings.Contains(strings.ToLower(config.Name), query) ||
+		strings.Contains(strings.ToLower(config.Project), query) ||
+		strings.Contains(strings.ToLower(config.Type), query) ||
+		strings.Contains(strings.ToLower(config.Path), query) ||
+		strings.Contains(strings.ToLower(config.Description), query)
+}
+
+func fuzzyMatch(pattern, text string) bool {
+	if pattern == "" {
+		return true
+	}
+	if text == "" {
+		return false
+	}
+
+	patternIdx := 0
+	textIdx := 0
+
+	for textIdx < len(text) && patternIdx < len(pattern) {
+		if text[textIdx] == pattern[patternIdx] {
+			patternIdx++
+		}
+		textIdx++
+	}
+
+	return patternIdx == len(pattern)
 }
 
 func (m *model) updateTable() {
-	sortedConfigs := m.getSortedConfigs()
+	filteredConfigs := m.getFilteredConfigs()
 	visibleColumns := m.table.Columns()
 
 	var rows []table.Row
-	m.configIndices = []int{} // Reset config indices mapping
+	m.configIndices = []int{}
 
 	var lastProject string
 	configIndex := 0
 
-	for _, config := range sortedConfigs {
-		// Handle empty project display
+	for _, config := range filteredConfigs {
 		displayProject := config.Project
 		if displayProject == "" {
 			displayProject = "General"
 		}
 
-		// Add project header if this is a new project
-		if displayProject != lastProject {
-			// Create project header row
+		// Add project header (only in non-search mode or when not sorting by recent)
+		if !m.sortByRecent && displayProject != lastProject {
 			projectHeader := fmt.Sprintf("📂 %s", displayProject)
-
-			// Create header row with same number of columns as visible columns
 			headerRow := make(table.Row, len(visibleColumns))
-			headerRow[0] = projectHeader // Show project in first column
+			headerRow[0] = projectHeader
 			for i := 1; i < len(headerRow); i++ {
 				headerRow[i] = ""
 			}
-
 			rows = append(rows, headerRow)
-			m.configIndices = append(m.configIndices, -1) // -1 indicates header row
+			m.configIndices = append(m.configIndices, -1)
 			lastProject = displayProject
 		}
 
-		// Create config row - build full row data first
-		fullRowData := []string{config.Name, displayProject, config.Type, config.Path, config.Description}
+		// Build row with status indicators
+		name := config.Name
+		if !editor.FileExists(config.Path) {
+			name = "❌ " + name
+		} else if !config.LastOpened.IsZero() {
+			name = "✓ " + name
+		}
 
-		// Create visible row based on current visible columns and scroll offset
+		fullRowData := []string{name, displayProject, config.Type, config.Path, config.Description}
+
 		visibleRow := make(table.Row, len(visibleColumns))
 		for i, col := range visibleColumns {
 			columnIndex := m.getColumnIndex(col.Title)
@@ -204,6 +719,7 @@ func (m *model) updateTable() {
 		m.configIndices = append(m.configIndices, configIndex)
 		configIndex++
 	}
+
 	m.table.SetRows(rows)
 }
 
@@ -230,10 +746,8 @@ func (m *model) adjustLayout() {
 		tableHeight = 5
 	}
 
-	// Calculate available width for columns
-	availableWidth := m.width - 6 // Account for borders
+	availableWidth := m.width - 6
 
-	// Calculate how many columns can fit
 	totalWidth := 0
 	visibleCols := 0
 	for i, col := range m.allColumns {
@@ -248,16 +762,13 @@ func (m *model) adjustLayout() {
 		}
 	}
 
-	// Ensure we show at least one column
 	if visibleCols == 0 {
 		visibleCols = 1
-		// Create a copy of the first column and adjust width
 		firstCol := m.allColumns[0]
 		firstCol.Width = availableWidth
 		m.allColumns[0] = firstCol
 	}
 
-	// Apply horizontal scrolling offset
 	startCol := m.scrollOffset
 	endCol := startCol + visibleCols
 	if endCol > len(m.allColumns) {
@@ -269,20 +780,17 @@ func (m *model) adjustLayout() {
 		m.scrollOffset = startCol
 	}
 
-	// Select visible columns
 	var visibleColumns []table.Column
 	for i := startCol; i < endCol && i < len(m.allColumns); i++ {
 		visibleColumns = append(visibleColumns, m.allColumns[i])
 	}
 
-	// If we have extra space, distribute it among visible columns
 	if len(visibleColumns) > 0 {
 		usedWidth := 0
 		for _, col := range visibleColumns {
 			usedWidth += col.Width
 		}
 		if extraWidth := availableWidth - usedWidth; extraWidth > 0 {
-			// Distribute extra width to the last column
 			visibleColumns[len(visibleColumns)-1].Width += extraWidth
 		}
 	}
@@ -292,440 +800,40 @@ func (m *model) adjustLayout() {
 	m.maxCols = len(m.allColumns)
 }
 
-func (m *model) startEdit() {
-	if len(m.configs) == 0 {
-		return
-	}
-
-	m.editMode = true
-	displayIndex := m.table.Cursor()
-	m.editRow = m.getOriginalIndexByDisplayIndex(displayIndex)
-	if m.editRow == -1 {
-		return // Invalid index
-	}
-	m.editCol = 0 // Start with name column
-
-	// Set the current value in the text input
-	config := m.configs[m.editRow]
-	var initialValue string
-	switch m.editCol {
-	case 0:
-		initialValue = config.Name
-	case 1:
-		initialValue = config.Project
-	case 2:
-		initialValue = config.Type
-	case 3:
-		initialValue = config.Path
-	case 4:
-		initialValue = config.Description
-	}
-	m.textInput.SetValue(initialValue)
-	m.textInput.SetCursor(len(initialValue))
-	m.textInput.Focus()
-}
-
-func (m *model) saveEdit() {
-	if !m.editMode || m.editRow < 0 || m.editRow >= len(m.configs) {
-		return
-	}
-
-	value := m.textInput.Value()
-	switch m.editCol {
-	case 0:
-		m.configs[m.editRow].Name = value
-	case 1:
-		m.configs[m.editRow].Project = value
-	case 2:
-		m.configs[m.editRow].Type = value
-	case 3:
-		m.configs[m.editRow].Path = expandPath(value)
-	case 4:
-		m.configs[m.editRow].Description = value
-	}
-
-	m.saveConfigs()
-	m.updateTable()
-}
-
-func (m *model) cancelEdit() {
-	m.editMode = false
-	m.editRow = -1
-	m.editCol = -1
-	m.textInput.Blur()
-	m.textInput.SetValue("")
-}
-
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(homeDir, path[2:])
-	}
-	return path
-}
-
-func (m model) Init() tea.Cmd {
-	return tea.SetWindowTitle("zap - File Registry") // Set initial window title
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case statusMsg:
-		m.statusMsg = msg.message
-		m.statusExpiry = time.Now().Add(3 * time.Second)
-		return m, nil
-
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.adjustLayout()
-		m.updateTable()
-		return m, nil
-
-	case tea.KeyMsg:
-		if m.viewMode {
-			return m.updateView(msg)
-		}
-		if m.editMode {
-			return m.updateEdit(msg)
-		}
-		if m.confirmDelete {
-			return m.updateDeleteConfirm(msg)
-		}
-		return m.updateNormal(msg)
-	}
-
-	// Let table handle mouse events when not editing
-	if !m.editMode && !m.viewMode {
-		m.table, cmd = m.table.Update(msg)
-		return m, cmd
-	}
-
-	return m, nil
-}
-
-func (m model) updateView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "q":
-		m.viewMode = false
-		m.viewContent = ""
-		m.viewPath = ""
-		return m, nil
-	case "e":
-		// Exit view mode and open in external editor
-		m.viewMode = false
-		m.viewContent = ""
-		displayIndex := m.table.Cursor()
-		config := m.getConfigByDisplayIndex(displayIndex)
-		if config != nil {
-			return m, m.openInEditor(*config)
-		}
-		return m, nil
-	}
-	return m, nil
-}
-
-func (m model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "y", "Y":
-		// Confirm deletion
-		if m.deleteIndex >= 0 && m.deleteIndex < len(m.configs) {
-			configName := m.configs[m.deleteIndex].Name
-			m.configs = append(m.configs[:m.deleteIndex], m.configs[m.deleteIndex+1:]...)
-			m.saveConfigs()
-			m.updateTable()
-			m.confirmDelete = false
-			m.deleteIndex = -1
-			return m, showStatus(fmt.Sprintf("🗑️ Deleted %s", configName))
-		}
-		m.confirmDelete = false
-		m.deleteIndex = -1
-		return m, nil
-	case "n", "N", "esc":
-		// Cancel deletion
-		m.confirmDelete = false
-		m.deleteIndex = -1
-		return m, showStatus("❌ Deletion cancelled")
-	}
-	return m, nil
-}
-
-func (m model) updateEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.cancelEdit()
-		return m, nil
-	case "enter":
-		m.saveEdit()
-		m.cancelEdit()
-		return m, showStatus("✅ File updated")
-	case "tab":
-		// Save current field and move to next
-		m.saveEdit()
-		m.editCol = (m.editCol + 1) % 5
-		config := m.configs[m.editRow]
-		var newValue string
-		switch m.editCol {
-		case 0:
-			newValue = config.Name
-		case 1:
-			newValue = config.Project
-		case 2:
-			newValue = config.Type
-		case 3:
-			newValue = config.Path
-		case 4:
-			newValue = config.Description
-		}
-		m.textInput.SetValue(newValue)
-		m.textInput.SetCursor(len(newValue))
-		return m, nil
-	case "shift+tab":
-		// Save current field and move to previous
-		m.saveEdit()
-		m.editCol = (m.editCol - 1 + 5) % 5
-		config := m.configs[m.editRow]
-		var newValue string
-		switch m.editCol {
-		case 0:
-			newValue = config.Name
-		case 1:
-			newValue = config.Project
-		case 2:
-			newValue = config.Type
-		case 3:
-			newValue = config.Path
-		case 4:
-			newValue = config.Description
-		}
-		m.textInput.SetValue(newValue)
-		m.textInput.SetCursor(len(newValue))
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
-}
-
-func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "q", "ctrl+c":
-		return m, tea.Quit
-	case "e":
-		m.startEdit()
-		return m, nil
-	case "n", "a":
-		// Add new config
-		newConfig := ConfigEntry{
-			Name:        "New File",
-			Path:        "~/path/to/file.json",
-			Type:        "json",
-			Project:     "",
-			Description: "File description",
-		}
-		m.configs = append(m.configs, newConfig)
-		m.saveConfigs()
-		m.updateTable()
-		// Find the display index of the newly added config
-		displayIndex := m.findConfigDisplayIndex(newConfig)
-		if displayIndex != -1 {
-			m.table.SetCursor(displayIndex)
-			m.startEdit()
-		}
-		return m, showStatus("➕ New file added")
-	case "d", "delete":
-		if len(m.configs) > 0 {
-			displayIndex := m.table.Cursor()
-			originalIndex := m.getOriginalIndexByDisplayIndex(displayIndex)
-			if originalIndex == -1 {
-				return m, nil
-			}
-			m.confirmDelete = true
-			m.deleteIndex = originalIndex
-			return m, showStatus(fmt.Sprintf("❓ Delete '%s'? (y/n)", m.configs[originalIndex].Name))
-		}
-		return m, nil
-	case " ", "enter":
-		if len(m.configs) > 0 {
-			displayIndex := m.table.Cursor()
-			config := m.getConfigByDisplayIndex(displayIndex)
-			if config != nil {
-				return m, m.openInEditor(*config)
-			}
-		}
-		return m, nil
-
-	case "r":
-		m.configs = loadConfigs(m.configFile)
-		m.updateTable()
-		return m, showStatus("🔄 Refreshed")
-	case "left":
-		// Horizontal scroll left
-		if m.scrollOffset > 0 {
-			m.scrollOffset--
-			m.adjustLayout()
-			m.updateTable()
-		}
-		return m, nil
-	case "right":
-		// Horizontal scroll right
-		maxOffset := m.maxCols - len(m.table.Columns())
-		if maxOffset < 0 {
-			maxOffset = 0
-		}
-		if m.scrollOffset < maxOffset {
-			m.scrollOffset++
-			m.adjustLayout()
-			m.updateTable()
-		}
-		return m, nil
-	default:
-		// Let table handle arrow keys and other navigation
-		var cmd tea.Cmd
-		m.table, cmd = m.table.Update(msg)
-		return m, cmd
-	}
-
-	return m, nil
-}
-
-func (m model) openInEditor(config ConfigEntry) tea.Cmd {
-	return func() tea.Msg {
-		// Expand path
-		expandedPath := expandPath(config.Path)
-
-		// Check if file exists
-		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
-			return statusMsg{message: fmt.Sprintf("❌ File not found: %s", expandedPath)}
-		}
-
-		// Try different editors in order of preference
-		editors := []string{"code", "nano", "vim", "vi"}
-		var cmd *exec.Cmd
-
-		for _, editor := range editors {
-			if _, err := exec.LookPath(editor); err == nil {
-				if editor == "code" {
-					// VS Code
-					cmd = exec.Command(editor, expandedPath)
-				} else {
-					// Terminal editors
-					cmd = exec.Command(editor, expandedPath)
-				}
-				break
-			}
-		}
-
-		if cmd == nil {
-			return statusMsg{message: "❌ No suitable editor found (tried: code, nano, vim, vi)"}
-		}
-
-		err := cmd.Start()
-		if err != nil {
-			return statusMsg{message: fmt.Sprintf("❌ Failed to open editor: %v", err)}
-		}
-
-		return statusMsg{message: fmt.Sprintf("📝 Opened %s in editor", config.Name)}
-	}
-}
-
-func (m model) viewConfig(config ConfigEntry) tea.Cmd {
-	return func() tea.Msg {
-		// Expand path
-		expandedPath := expandPath(config.Path)
-
-		// Read file content
-		content, err := os.ReadFile(expandedPath)
-		if err != nil {
-			return statusMsg{message: fmt.Sprintf("❌ Failed to read file: %v", err)}
-		}
-
-		// Update model to show content
-		m.viewMode = true
-		m.viewContent = string(content)
-		m.viewPath = expandedPath
-
-		return statusMsg{message: fmt.Sprintf("👁️ Viewing %s (press 'e' to edit, 'esc' to close)", config.Name)}
-	}
-}
-
-func (m *model) getSortedConfigs() []ConfigEntry {
-	// Create a copy of configs for sorting
-	sortedConfigs := make([]ConfigEntry, len(m.configs))
-	copy(sortedConfigs, m.configs)
-
-	// Sort configs by project first, then by name within each project
-	sort.Slice(sortedConfigs, func(i, j int) bool {
-		// Handle empty projects by treating them as "General"
-		projectI := sortedConfigs[i].Project
-		if projectI == "" {
-			projectI = "General"
-		}
-		projectJ := sortedConfigs[j].Project
-		if projectJ == "" {
-			projectJ = "General"
-		}
-
-		// First sort by project
-		if !strings.EqualFold(projectI, projectJ) {
-			return strings.ToLower(projectI) < strings.ToLower(projectJ)
-		}
-
-		// If projects are the same, sort by name
-		return strings.ToLower(sortedConfigs[i].Name) < strings.ToLower(sortedConfigs[j].Name)
-	})
-
-	return sortedConfigs
-}
-
-func (m *model) getConfigByDisplayIndex(displayIndex int) *ConfigEntry {
-	// Check if the display index is valid and not a header row
+func (m *model) getConfigByDisplayIndex(displayIndex int) *models.ConfigEntry {
 	if displayIndex < 0 || displayIndex >= len(m.configIndices) {
 		return nil
 	}
 
-	// Get the actual config index (-1 means header row)
 	configIndex := m.configIndices[displayIndex]
 	if configIndex == -1 {
-		return nil // This is a header row, no config associated
-	}
-
-	sortedConfigs := m.getSortedConfigs()
-	if configIndex >= len(sortedConfigs) {
 		return nil
 	}
 
-	// Find the original config in m.configs that matches the sorted config
-	sortedConfig := sortedConfigs[configIndex]
+	filteredConfigs := m.getFilteredConfigs()
+	if configIndex >= len(filteredConfigs) {
+		return nil
+	}
+
+	sortedConfig := filteredConfigs[configIndex]
 	for i := range m.configs {
-		if m.configs[i].Name == sortedConfig.Name &&
-			m.configs[i].Path == sortedConfig.Path &&
-			m.configs[i].Project == sortedConfig.Project {
+		if m.configs[i].Equals(&sortedConfig) {
 			return &m.configs[i]
 		}
 	}
 	return nil
 }
 
-func (m *model) findConfigDisplayIndex(targetConfig ConfigEntry) int {
-	// Find the display index of a config in the table
+func (m *model) findConfigDisplayIndex(targetConfig models.ConfigEntry) int {
 	for i, configIndex := range m.configIndices {
 		if configIndex == -1 {
-			continue // Skip header rows
+			continue
 		}
 
-		sortedConfigs := m.getSortedConfigs()
-		if configIndex < len(sortedConfigs) {
-			config := sortedConfigs[configIndex]
-			if config.Name == targetConfig.Name &&
-				config.Path == targetConfig.Path &&
-				config.Project == targetConfig.Project {
+		filteredConfigs := m.getFilteredConfigs()
+		if configIndex < len(filteredConfigs) {
+			config := filteredConfigs[configIndex]
+			if config.Equals(&targetConfig) {
 				return i
 			}
 		}
@@ -734,28 +842,23 @@ func (m *model) findConfigDisplayIndex(targetConfig ConfigEntry) int {
 }
 
 func (m *model) getOriginalIndexByDisplayIndex(displayIndex int) int {
-	// Check if the display index is valid and not a header row
 	if displayIndex < 0 || displayIndex >= len(m.configIndices) {
 		return -1
 	}
 
-	// Get the actual config index (-1 means header row)
 	configIndex := m.configIndices[displayIndex]
 	if configIndex == -1 {
-		return -1 // This is a header row, no config associated
-	}
-
-	sortedConfigs := m.getSortedConfigs()
-	if configIndex >= len(sortedConfigs) {
 		return -1
 	}
 
-	// Find the original index in m.configs that matches the sorted config
-	sortedConfig := sortedConfigs[configIndex]
+	filteredConfigs := m.getFilteredConfigs()
+	if configIndex >= len(filteredConfigs) {
+		return -1
+	}
+
+	sortedConfig := filteredConfigs[configIndex]
 	for i := range m.configs {
-		if m.configs[i].Name == sortedConfig.Name &&
-			m.configs[i].Path == sortedConfig.Path &&
-			m.configs[i].Project == sortedConfig.Project {
+		if m.configs[i].Equals(&sortedConfig) {
 			return i
 		}
 	}
@@ -763,142 +866,108 @@ func (m *model) getOriginalIndexByDisplayIndex(displayIndex int) int {
 }
 
 func (m model) View() string {
-	if m.viewMode {
-		// View mode - show file content
-		titleStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7C3AED")).
-			Bold(true)
-
-		contentStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#374151")).
-			Padding(1).
-			Height(m.height - 8).
-			Width(m.width - 4)
-
-		footer := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#6B7280")).
-			Render("e: edit in external editor • esc/q: close view")
-
-		title := titleStyle.Render(fmt.Sprintf("📄 Viewing: %s", m.viewPath))
-		content := contentStyle.Render(m.viewContent)
-
-		return lipgloss.JoinVertical(lipgloss.Left, title, "", content, "", footer)
+	// Help mode
+	if m.mode == ModeHelp {
+		return ui.HelpScreen(m.width, m.height)
 	}
 
-	// Normal table view
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7C3AED")).
-		Bold(true)
-	header := titleStyle.Render("⚡ zap - File Registry")
+	// Normal view
+	header := ui.TitleStyle.Render("⚡ zap - File Registry")
 
+	// Empty state
 	if len(m.configs) == 0 {
-		emptyStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#6B7280")).
+		content := ui.MutedStyle.
 			MarginTop(1).
-			MarginBottom(1)
+			MarginBottom(1).
+			Render("📋 No files registered yet.\n\n💡 Press 'n' to add your first file!")
 
-		content := emptyStyle.Render("📋 No files registered yet.\n\n💡 Press 'n' to add your first file!")
-		footer := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#60A5FA")).
-			Render("Commands: ") +
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#FBBF24")).Render("n/a: add file") +
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280")).Render(" • ") +
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#F87171")).Render("q: quit")
+		footer := ui.InfoStyle.Render("Commands: ") +
+			ui.WarningStyle.Render("n/a: add file") +
+			ui.MutedStyle.Render(" • ") +
+			ui.ErrorStyle.Render("q: quit") +
+			ui.MutedStyle.Render(" • ") +
+			ui.InfoStyle.Render("?: help")
 
-		return lipgloss.JoinVertical(lipgloss.Left,
-			header,
-			content,
-			footer,
-		)
+		return lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
 	}
 
+	// Status message
 	var statusMessage string
 	if m.statusMsg != "" && time.Now().Before(m.statusExpiry) {
-		// Color code based on message type
-		if strings.Contains(m.statusMsg, "❌") || strings.Contains(m.statusMsg, "Failed") {
-			statusMessage = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#EF4444")).
-				Bold(true).
-				Render("Status: " + m.statusMsg)
-		} else {
-			statusMessage = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#10B981")).
-				Bold(true).
-				Render("Status: " + m.statusMsg)
-		}
+		style := ui.GetStatusStyle(m.statusMsg)
+		statusMessage = style.Render("Status: " + m.statusMsg)
 	}
 
-	// Show different footer based on mode
+	// Footer based on mode
 	var footer string
-	if m.editMode {
+	switch m.mode {
+	case ModeEdit, ModeAdd:
 		colNames := []string{"Name", "Project", "Type", "Path", "Description"}
 		colName := colNames[m.editCol]
 
 		typeHelp := ""
 		if colName == "Type" {
-			typeHelp = " (json, yaml, toml, ini, txt)"
+			typeHelp = " (json, yaml, toml, etc.)"
+		} else if colName == "Path" {
+			typeHelp = " (~/ for home)"
 		}
 
-		editStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#F59E0B")).
-			Bold(true)
+		prefix := "✏️  Editing"
+		if m.mode == ModeAdd {
+			prefix = "➕ Adding"
+		}
 
-		helpStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#6B7280"))
+		footer = ui.EditStyle.Render(fmt.Sprintf("%s %s%s: %s", prefix, colName, typeHelp, m.textInput.View())) +
+			ui.HelpStyle.Render("\nCommands: tab: next field • enter: save • esc: cancel")
 
-		footer = editStyle.Render(fmt.Sprintf("✏️  Editing %s%s: %s", colName, typeHelp, m.textInput.View())) +
-			helpStyle.Render("\nCommands: tab: next field • enter: save • esc: cancel")
-	} else if m.confirmDelete {
-		deleteStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#DC2626")).
-			Bold(true)
+	case ModeSearch:
+		searchType := "Search"
+		if m.fuzzyMode {
+			searchType = "Fuzzy Find"
+		}
+		matchCount := m.getFilteredConfigsCount()
+		footer = ui.SearchStyle.Render(fmt.Sprintf("🔍 %s: %s", searchType, m.searchInput.View())) +
+			ui.HelpStyle.Render(fmt.Sprintf("\n%d matches • enter: apply • esc: cancel", matchCount))
 
-		helpStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#6B7280"))
+	case ModeConfirmDelete:
+		footer = ui.DeleteStyle.Render(fmt.Sprintf("🗑️  Delete '%s'? ", m.configs[m.deleteIndex].Name)) +
+			ui.HelpStyle.Render("y: yes • n/esc: no")
 
-		footer = deleteStyle.Render(fmt.Sprintf("🗑️  Delete '%s'? ", m.configs[m.deleteIndex].Name)) +
-			helpStyle.Render("y: yes • n/esc: no")
-	} else {
-		// Style individual command groups with colors
-		navStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#60A5FA"))    // Blue
-		actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#34D399")) // Green
-		editStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FBBF24"))   // Yellow
-		systemStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#F87171")) // Red
-		helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
+	default:
+		commands := []string{
+			ui.InfoStyle.Render("↑↓/jk: nav"),
+			ui.SuccessStyle.Render("space: open"),
+			ui.WarningStyle.Render("e: edit"),
+			ui.WarningStyle.Render("n: add"),
+			ui.ErrorStyle.Render("d: del"),
+			ui.InfoStyle.Render("/: search"),
+			ui.InfoStyle.Render("s: sort"),
+			ui.ErrorStyle.Render("q: quit"),
+			ui.InfoStyle.Render("?: help"),
+		}
 
 		scrollHint := ""
 		if m.maxCols > len(m.table.Columns()) {
-			scrollHint = " • " + navStyle.Render("←→: scroll columns")
+			scrollHint = " • " + ui.InfoStyle.Render("←→: scroll")
 		}
 
-		commands := []string{
-			navStyle.Render("↑↓: navigate") + scrollHint,
-			actionStyle.Render("space/enter: edit"),
-			editStyle.Render("e: edit fields"),
-			editStyle.Render("n/a: add"),
-			systemStyle.Render("d: delete"),
-			systemStyle.Render("r: refresh"),
-			systemStyle.Render("q: quit"),
+		searchHint := ""
+		if m.searchQuery != "" {
+			searchHint = " • " + ui.SearchStyle.Render(fmt.Sprintf("🔍 '%s'", m.searchQuery))
 		}
-		footer = helpStyle.Render("Commands: " + strings.Join(commands, " • "))
+
+		footer = ui.HelpStyle.Render("Commands: "+strings.Join(commands, " • ")) + scrollHint + searchHint
 	}
 
-	// Build the final view
+	// Build final view
 	var parts []string
-
-	// Always include header
 	parts = append(parts, header)
-
-	// Add table
 	parts = append(parts, m.table.View())
 
-	// Add status message if present
 	if statusMessage != "" {
 		parts = append(parts, statusMessage)
 	}
 
-	// Add footer
 	parts = append(parts, footer)
 
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
