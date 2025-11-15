@@ -17,16 +17,14 @@ zap is your personal file shortcut manager on steroids. Instead of hunting throu
 
 ### Search & Discovery
 - **Powerful Search** - Press `/` to search across all file metadata (name, path, project, description)
-- **Fuzzy Finding** - Press `Ctrl+F` for lightning-fast fuzzy file finding
 - **Live Search Results** - See matches update in real-time as you type
 - **Smart Filtering** - Searches across name, project, type, path, and description
 
 ### Navigation
-- **Vim-Style Keys** - Use `j/k` for navigation, `g/G` for top/bottom
+- **Vim-Style Keys** - Use `j/k` for up/down navigation
 - **Page Navigation** - `PageUp/PageDown` or `Ctrl+U/Ctrl+D` for fast scrolling
 - **Arrow Keys** - Traditional `↑/↓` navigation also supported
 - **Home/End** - Jump to first or last file instantly
-- **Column Scrolling** - Use `←/→` or `h/l` to scroll through columns
 
 ### Smart Features
 - **Auto-detect File Type** - Automatically detects file type from extension
@@ -78,7 +76,7 @@ zap
 2. **Fill in details**: Tab through Name, Project, Type, Path, Description
 3. **Save**: Press Enter
 4. **Open file**: Navigate with arrows and press Space or Enter
-5. **Search**: Press `/` to search or `Ctrl+F` for fuzzy find
+5. **Search**: Press `/` to search
 
 ### All Commands
 
@@ -87,10 +85,8 @@ zap
 - `↓/j` - Move down
 - `PageUp / Ctrl+u` - Page up
 - `PageDown / Ctrl+d` - Page down
-- `Home / g` - Go to top
-- `End / G` - Go to bottom
-- `← / h` - Scroll columns left
-- `→ / l` - Scroll columns right
+- `Home` - Go to top
+- `End` - Go to bottom
 
 #### Actions
 - `space / enter` - Open file in editor
@@ -101,7 +97,6 @@ zap
 
 #### Search & Filter
 - `/` - Start search mode
-- `Ctrl+f` - Start fuzzy find mode
 - `esc` - Clear search/exit mode
 - `enter` - Apply search filter
 
@@ -240,10 +235,9 @@ MIT
 1. **Use descriptive names**: Make files easy to find with clear, searchable names
 2. **Add good descriptions**: The description field is searchable - use it!
 3. **Organize by project**: Group related files by project for better organization
-4. **Leverage fuzzy find**: `Ctrl+F` then type just the key letters (e.g., "dc" finds "docker-compose.yml")
-5. **Use sort modes**: Press `s` to cycle through 5 sort options - find the view that works best for you
-6. **Check recently opened**: Use Recent sort mode to see your most-used files at the top
-7. **Group by type**: Type sort mode is great for finding all configs or all scripts quickly
+4. **Use sort modes**: Press `s` to cycle through 5 sort options - find the view that works best for you
+5. **Check recently opened**: Use Recent sort mode to see your most-used files at the top
+6. **Group by type**: Type sort mode is great for finding all configs or all scripts quickly
 
 ---
 

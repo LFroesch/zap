@@ -49,11 +49,9 @@ func HelpScreen(width, height int) string {
 	content.WriteString("\n")
 	content.WriteString(keyStyle.Render("PageDown / Ctrl+d") + descStyle.Render("Page down"))
 	content.WriteString("\n")
-	content.WriteString(keyStyle.Render("Home / g") + descStyle.Render("Go to top"))
+	content.WriteString(keyStyle.Render("Home") + descStyle.Render("Go to top"))
 	content.WriteString("\n")
-	content.WriteString(keyStyle.Render("End / G") + descStyle.Render("Go to bottom"))
-	content.WriteString("\n")
-	content.WriteString(keyStyle.Render("← / →") + descStyle.Render("Scroll columns"))
+	content.WriteString(keyStyle.Render("End") + descStyle.Render("Go to bottom"))
 	content.WriteString("\n")
 
 	// Actions
@@ -75,15 +73,13 @@ func HelpScreen(width, height int) string {
 	content.WriteString("\n")
 	content.WriteString(keyStyle.Render("/") + descStyle.Render("Start search/filter"))
 	content.WriteString("\n")
-	content.WriteString(keyStyle.Render("ctrl+f") + descStyle.Render("Fuzzy find"))
-	content.WriteString("\n")
 	content.WriteString(keyStyle.Render("esc") + descStyle.Render("Clear search"))
 	content.WriteString("\n")
 
 	// Sorting
 	content.WriteString(headerStyle.Render("📊 Sorting"))
 	content.WriteString("\n")
-	content.WriteString(keyStyle.Render("s") + descStyle.Render("Toggle sort (project/recent)"))
+	content.WriteString(keyStyle.Render("s") + descStyle.Render("Cycle sort modes (5 options)"))
 	content.WriteString("\n")
 
 	// System
