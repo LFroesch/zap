@@ -53,7 +53,7 @@ func HelpScreen(width, height int) string {
 	content.WriteString("\n")
 	content.WriteString(keyStyle.Render("End / G") + descStyle.Render("Go to bottom"))
 	content.WriteString("\n")
-	content.WriteString(keyStyle.Render("← / →") + descStyle.Render("Scroll columns"))
+	content.WriteString(keyStyle.Render("← → / h l") + descStyle.Render("Scroll columns"))
 	content.WriteString("\n")
 
 	// Actions
@@ -83,7 +83,7 @@ func HelpScreen(width, height int) string {
 	// Sorting
 	content.WriteString(headerStyle.Render("📊 Sorting"))
 	content.WriteString("\n")
-	content.WriteString(keyStyle.Render("s") + descStyle.Render("Toggle sort (project/recent)"))
+	content.WriteString(keyStyle.Render("s") + descStyle.Render("Cycle sort modes (5 options)"))
 	content.WriteString("\n")
 
 	// System
