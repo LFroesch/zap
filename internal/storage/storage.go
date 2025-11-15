@@ -112,6 +112,48 @@ func SortByRecentlyOpened(configs []models.ConfigEntry) []models.ConfigEntry {
 	return sorted
 }
 
+// SortByName sorts configs alphabetically by name
+func SortByName(configs []models.ConfigEntry) []models.ConfigEntry {
+	sorted := make([]models.ConfigEntry, len(configs))
+	copy(sorted, configs)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return strings.ToLower(sorted[i].Name) < strings.ToLower(sorted[j].Name)
+	})
+
+	return sorted
+}
+
+// SortByType sorts configs by file type, then by name
+func SortByType(configs []models.ConfigEntry) []models.ConfigEntry {
+	sorted := make([]models.ConfigEntry, len(configs))
+	copy(sorted, configs)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		// First sort by type
+		if !strings.EqualFold(sorted[i].Type, sorted[j].Type) {
+			return strings.ToLower(sorted[i].Type) < strings.ToLower(sorted[j].Type)
+		}
+
+		// If types are the same, sort by name
+		return strings.ToLower(sorted[i].Name) < strings.ToLower(sorted[j].Name)
+	})
+
+	return sorted
+}
+
+// SortByPath sorts configs alphabetically by full path
+func SortByPath(configs []models.ConfigEntry) []models.ConfigEntry {
+	sorted := make([]models.ConfigEntry, len(configs))
+	copy(sorted, configs)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return strings.ToLower(sorted[i].Path) < strings.ToLower(sorted[j].Path)
+	})
+
+	return sorted
+}
+
 // FindDuplicates checks if a config with the same path already exists
 func FindDuplicates(configs []models.ConfigEntry, path string) *models.ConfigEntry {
 	for i := range configs {
