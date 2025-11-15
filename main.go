@@ -323,14 +323,6 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.SetValue(m.searchQuery)
 		return m, showStatus("🔍 Search mode (press Enter to apply, Esc to cancel)")
 
-	case "ctrl+f":
-		m.mode = ModeSearch
-		m.fuzzyMode = true
-		m.searchInput.Focus()
-		m.searchInput.Placeholder = "Fuzzy find..."
-		m.searchInput.SetValue(m.searchQuery)
-		return m, showStatus("🎯 Fuzzy find mode")
-
 	case "s":
 		// Cycle through sort modes: 0=Project, 1=Recent, 2=Name, 3=Type, 4=Path
 		m.sortMode = (m.sortMode + 1) % 5
@@ -388,26 +380,6 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.updateTable()
 		return m, showStatus("🔄 Refreshed")
 
-	case "left", "h":
-		if m.scrollOffset > 0 {
-			m.scrollOffset--
-			m.adjustLayout()
-			m.updateTable()
-		}
-		return m, nil
-
-	case "right", "l":
-		maxOffset := m.maxCols - len(m.table.Columns())
-		if maxOffset < 0 {
-			maxOffset = 0
-		}
-		if m.scrollOffset < maxOffset {
-			m.scrollOffset++
-			m.adjustLayout()
-			m.updateTable()
-		}
-		return m, nil
-
 	case "k", "up":
 		var cmd tea.Cmd
 		m.table, cmd = m.table.Update(msg)
@@ -418,11 +390,11 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.table, cmd = m.table.Update(msg)
 		return m, cmd
 
-	case "g", "home":
+	case "home":
 		m.table.SetCursor(0)
 		return m, nil
 
-	case "G", "end":
+	case "end":
 		m.table.SetCursor(len(m.table.Rows()) - 1)
 		return m, nil
 
