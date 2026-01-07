@@ -1,4 +1,4 @@
-module configly
+module github.com/LFroesch/zap
 
 go 1.23.3
 
