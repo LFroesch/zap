@@ -50,18 +50,12 @@ zap is your personal file shortcut manager on steroids. Instead of hunting throu
 ## Installation
 
 ```bash
-# Build
-go build -o zap main.go
+go install github.com/LFroesch/zap@latest
+```
 
-# Install globally (Linux/macOS)
-sudo cp zap /usr/local/bin/
-
-# Or install to user directory
-cp zap ~/.local/bin/
-
-# Make sure ~/.local/bin is in PATH
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
+Make sure `$GOPATH/bin` (usually `~/go/bin`) is in your PATH:
+```bash
+export PATH="$HOME/go/bin:$PATH"
 ```
 
 ## Usage
