@@ -19,6 +19,7 @@ type ConfigEntry struct {
 
 // ConfigManager manages the collection of config entries
 type ConfigManager struct {
+	Editor  string        `json:"editor,omitempty"`
 	Configs []ConfigEntry `json:"configs"`
 }
 

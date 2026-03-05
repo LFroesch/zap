@@ -2,13 +2,13 @@ package ui
 
 import "github.com/charmbracelet/lipgloss"
 
-// Color palette
+// Color palette (orange theme for zap)
 const (
-	ColorPrimary   = "#7C3AED"
+	ColorPrimary   = "#FF8C00"
 	ColorSuccess   = "#10B981"
 	ColorWarning   = "#FBBF24"
 	ColorDanger    = "#EF4444"
-	ColorInfo      = "#60A5FA"
+	ColorInfo      = "#FF8C00"
 	ColorMuted     = "#6B7280"
 	ColorText      = "#E5E7EB"
 	ColorTextLight = "#F3F4F6"

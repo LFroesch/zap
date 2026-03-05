@@ -1,51 +1,22 @@
-# zap ⚡
+# zap
 
-A lightning-fast, feature-rich TUI file registry for developers. Organize and instantly access your most important files across all projects with powerful search, fuzzy finding, and smart navigation.
+A lightning-fast TUI file registry for developers. Organize and instantly access your most important files across all projects.
 
 ## What is zap?
 
-zap is your personal file shortcut manager on steroids. Instead of hunting through directories for that config file, database schema, or API spec you need to edit, just register it once and `zap` to it instantly. With advanced features like fuzzy finding, recently opened tracking, and vim-style navigation, it's the ultimate productivity tool for developers who work with many files across multiple projects.
+zap is a personal file shortcut manager. Register files once, then open them instantly from a single interface with search, sorting, and vim-style navigation.
 
 ## Features
 
-### Core Features
-- **Lightning Fast** - Open any registered file in your preferred editor with one keystroke
-- **Project Organization** - Group files by project for easy browsing
-- **Multiple File Types** - JSON, YAML, TOML, configs, docs, scripts - anything text-based
-- **Smart Editor Detection** - Automatically uses VS Code, nvim, vim, nano, or vi
-- **Live Status Indicators** - See at a glance which files exist, are broken, or were recently opened
-
-### Search & Discovery
-- **Powerful Search** - Press `/` to search across all file metadata (name, path, project, description)
-- **Live Search Results** - See matches update in real-time as you type
-- **Smart Filtering** - Searches across name, project, type, path, and description
-
-### Navigation
-- **Vim-Style Keys** - Use `j/k` for up/down navigation
-- **Page Navigation** - `PageUp/PageDown` or `Ctrl+U/Ctrl+D` for fast scrolling
-- **Arrow Keys** - Traditional `↑/↓` navigation also supported
-- **Home/End** - Jump to first or last file instantly
-
-### Smart Features
-- **Auto-detect File Type** - Automatically detects file type from extension
-- **Duplicate Prevention** - Prevents registering the same file twice
-- **Recently Opened Tracking** - Tracks when you open files for smart sorting
-- **Path Validation** - Shows broken file paths with ❌ indicator
-- **Atomic Saves** - Config changes are saved atomically to prevent corruption
-
-### Organization & Workflow
-- **5 Sort Modes** - Sort by Project, Recent, Name, Type, or Path (press `s` to cycle)
-- **Visual Indicators** - Persistent sort indicator in header shows current mode
-- **Smart Grouping** - Project mode shows 📂 headers, Type mode shows 📄 headers
-- **Status Icons** - ✓ for opened files, ❌ for broken paths
-- **Quick Edit Mode** - Tab through fields when editing metadata
-- **Confirmation Prompts** - Safety confirmation before deleting files
-
-### Help & Usability
-- **Built-in Help** - Press `?` to see all available commands
-- **Context-aware UI** - Footer shows relevant commands for current mode
-- **Status Messages** - Color-coded feedback for all operations
-- **Path Expansion** - Supports `~/` for home directory
+- **Instant access** - Open any registered file in your configured editor with one keystroke
+- **Project organization** - Group files by project
+- **Search** - Live search across all file metadata
+- **5 sort modes** - Project, Recent, Name, Type, Path
+- **Vim-style navigation** - j/k, g/G, ctrl+d/u
+- **Configurable editor** - Set your preferred editor in the config file
+- **Auto file-type detection** - Detects type from extension
+- **Duplicate prevention** - Prevents registering the same file twice
+- **Atomic saves** - Config changes saved atomically to prevent corruption
 
 ## Installation
 
@@ -66,77 +37,88 @@ zap
 
 ### Quick Start
 
-1. **Add your first file**: Press `n` or `a`
-2. **Fill in details**: Tab through Name, Project, Type, Path, Description
-3. **Save**: Press Enter
-4. **Open file**: Navigate with arrows and press Space or Enter
-5. **Search**: Press `/` to search
+1. Press `N` to add a file
+2. Tab through Name, Project, Type, Path, Description
+3. Press Enter to save
+4. Navigate with j/k and press `o` or Enter to open
 
-### All Commands
+## Editor Configuration
 
-#### Navigation
-- `↑/k` - Move up
-- `↓/j` - Move down
-- `PageUp / Ctrl+u` - Page up
-- `PageDown / Ctrl+d` - Page down
-- `Home` - Go to top
-- `End` - Go to bottom
+zap uses the `editor` field in `~/.config/zap/zap-registry.json` to determine which editor to use. It defaults to `code` (VS Code) if not set.
 
-#### Actions
-- `space / enter` - Open file in editor
-- `e` - Edit file metadata
-- `n / a` - Add new file
-- `d` - Delete file (with confirmation)
-- `r` - Refresh list from disk
-
-#### Search & Filter
-- `/` - Start search mode
-- `esc` - Clear search/exit mode
-- `enter` - Apply search filter
-
-#### Sorting
-- `s` - Cycle through sort modes (Project → Recent → Name → Type → Path)
-
-#### System
-- `?` - Show help screen
-- `q / Ctrl+c` - Quit
-
-### Edit Mode Navigation
-
-When editing or adding a file:
-- `tab` - Next field
-- `shift+tab` - Previous field
-- `enter` - Save changes
-- `esc` - Cancel (removes unsaved new entries)
-
-### Sort Modes
-
-Press `s` to cycle through 5 different sorting options:
-
-1. **📂 Project** - Groups files by project with headers (default)
-2. **🕐 Recent** - Shows most recently opened files first
-3. **🔤 Name** - Alphabetical by file name
-4. **📄 Type** - Groups by file type (json, yaml, etc.) with headers
-5. **📁 Path** - Alphabetical by full file path
-
-The current sort mode is always shown in the header: `⚡ zap - File Registry [📂 Project]`
-
-## Examples
-
-Perfect for managing:
-- **Config files** (`nginx.conf`, `docker-compose.yml`, `.env`)
-- **Data files** (`users.json`, `api-endpoints.yaml`, `schema.sql`)
-- **Documentation** (`README.md`, `API.md`, `CHANGELOG.md`)
-- **Scripts** (`deploy.sh`, `backup.sql`, `setup.py`)
-- **Dotfiles** (`.vimrc`, `.bashrc`, `.gitconfig`)
-- **Project files** (`package.json`, `Cargo.toml`, `go.mod`)
-
-## File Storage
-
-Files are registered in `~/.config/zap/zap-registry.json` but zap doesn't move or copy your files - it just creates shortcuts to them. The registry stores:
+To change your editor, either:
+- Press `,` in zap to open the config file and add/edit the `"editor"` field
+- Or edit `~/.config/zap/zap-registry.json` directly
 
 ```json
 {
+  "editor": "code",
+  "configs": [...]
+}
+```
+
+Supported values include any editor command in your PATH:
+- `code` - VS Code (default)
+- `cursor` - Cursor
+- `nvim` - Neovim
+- `vim` - Vim
+- `nano` - Nano
+- `emacs` - Emacs
+
+Terminal editors (nvim, vim, vi, nano, emacs) run inside the TUI. GUI editors (code, cursor, etc.) launch in the background.
+
+## Keybindings
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `j/k`, `up/down` | Navigate |
+| `g/G` | First/last item |
+| `ctrl+d/u` | Half-page scroll |
+
+### Actions
+
+| Key | Action |
+|-----|--------|
+| `enter/o` | Open file in editor |
+| `O` | Open parent directory in editor |
+| `e` | Edit file metadata |
+| `N` | Add new file |
+| `D` | Delete file (confirmation) |
+| `y` | Copy path to clipboard |
+| `r` | Refresh list |
+
+### Search & Sort
+
+| Key | Action |
+|-----|--------|
+| `/` | Search |
+| `S` | Cycle sort: Project/Recent/Name/Type/Path |
+
+### Edit Mode
+
+| Key | Action |
+|-----|--------|
+| `tab/shift+tab` | Next/previous field |
+| `enter` | Save |
+| `esc` | Cancel |
+
+### System
+
+| Key | Action |
+|-----|--------|
+| `,` | Open config |
+| `?` | Help |
+| `q/ctrl+c` | Quit |
+
+## File Storage
+
+Files are registered in `~/.config/zap/zap-registry.json`. Zap doesn't move or copy your files - it creates shortcuts to them.
+
+```json
+{
+  "editor": "code",
   "configs": [
     {
       "name": "API Config",
@@ -152,87 +134,22 @@ Files are registered in `~/.config/zap/zap-registry.json` but zap doesn't move o
 
 ## Architecture
 
-The codebase is organized into clean, modular packages:
-
 ```
 zap/
-├── main.go                 # Main application & UI logic
+├── main.go
+├── model.go
+├── update.go
+├── view.go
+├── helpers.go
 ├── internal/
-│   ├── models/            # Data structures
-│   │   └── config.go
-│   ├── storage/           # Config persistence
-│   │   └── storage.go
-│   ├── editor/            # Editor integration
-│   │   └── editor.go
-│   └── ui/                # UI components
+│   ├── models/config.go
+│   ├── storage/storage.go
+│   ├── editor/editor.go
+│   └── ui/
 │       ├── help.go
 │       └── styles.go
 ```
 
-## Why zap?
-
-Stop wasting time navigating to frequently used files. As developers, we often work across multiple projects with important files scattered everywhere. zap gives you instant access to all of them from a single, beautiful interface.
-
-### Before zap:
-```bash
-cd ~/projects/api
-vim config/database.yaml
-# Later...
-cd ~/projects/frontend
-code .env.production
-# Later...
-cd ~/dotfiles
-nano .vimrc
-```
-
-### With zap:
-```bash
-zap
-# Press / to search "database" → Enter → Opens instantly
-# Press / to search "env" → Enter → Opens instantly
-# Press / to search "vim" → Enter → Opens instantly
-```
-
-## Features at a Glance
-
-| Feature | Status |
-|---------|--------|
-| Multi-editor support | ✅ |
-| Fuzzy finding | ✅ |
-| Recently opened tracking | ✅ |
-| Search & filter | ✅ |
-| Vim-style navigation | ✅ |
-| Project grouping | ✅ |
-| Path validation | ✅ |
-| Duplicate prevention | ✅ |
-| Atomic saves | ✅ |
-| Auto file-type detection | ✅ |
-| Help screen | ✅ |
-| Live search | ✅ |
-| Performance caching | ✅ |
-
-## Contributing
-
-Contributions welcome! This is a focused tool for developer productivity. When contributing:
-
-- Keep it fast
-- Keep it keyboard-driven
-- Keep the code clean and modular
-- Test thoroughly
-
-## License
-
-MIT
-
-## Tips & Tricks
-
-1. **Use descriptive names**: Make files easy to find with clear, searchable names
-2. **Add good descriptions**: The description field is searchable - use it!
-3. **Organize by project**: Group related files by project for better organization
-4. **Use sort modes**: Press `s` to cycle through 5 sort options - find the view that works best for you
-5. **Check recently opened**: Use Recent sort mode to see your most-used files at the top
-6. **Group by type**: Type sort mode is great for finding all configs or all scripts quickly
-
 ---
 
-Built with ❤️ using [Bubble Tea](https://github.com/charmbracelet/bubbletea) by Charm
+Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) by Charm
