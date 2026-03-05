@@ -7,35 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"configly/internal/models"
+	"github.com/LFroesch/zap/internal/models"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Editor represents an available editor
-type Editor struct {
-	Name       string
-	Command    string
-	IsTerminal bool
-}
-
-// AvailableEditors lists editors in order of preference
-var AvailableEditors = []Editor{
-	{Name: "VS Code", Command: "code", IsTerminal: false},
-	{Name: "Neovim", Command: "nvim", IsTerminal: true},
-	{Name: "Vim", Command: "vim", IsTerminal: true},
-	{Name: "Nano", Command: "nano", IsTerminal: true},
-	{Name: "Vi", Command: "vi", IsTerminal: true},
-}
-
-// FindAvailableEditor finds the first available editor on the system
-func FindAvailableEditor() *Editor {
-	for _, editor := range AvailableEditors {
-		if _, err := exec.LookPath(editor.Command); err == nil {
-			return &editor
-		}
-	}
-	return nil
+var terminalEditors = map[string]bool{
+	"nvim": true, "vim": true, "vi": true, "nano": true, "emacs": true,
 }
 
 // ExpandPath expands ~ to home directory
@@ -57,77 +35,48 @@ func FileExists(path string) bool {
 	return err == nil
 }
 
-// FileStatus returns status information about a file
-type FileStatus struct {
-	Exists     bool
-	IsReadable bool
-	Size       int64
-}
-
-// GetFileStatus returns detailed status about a file
-func GetFileStatus(path string) FileStatus {
-	expandedPath := ExpandPath(path)
-	status := FileStatus{}
-
-	info, err := os.Stat(expandedPath)
-	if err != nil {
-		return status
-	}
-
-	status.Exists = true
-	status.Size = info.Size()
-
-	// Check if readable
-	file, err := os.Open(expandedPath)
-	if err == nil {
-		status.IsReadable = true
-		file.Close()
-	}
-
-	return status
-}
-
 // editorFinishedMsg is sent when the editor exits
 type editorFinishedMsg struct {
 	err  error
 	name string
 }
 
-// OpenConfig opens a config file in the appropriate editor
-func OpenConfig(config models.ConfigEntry) tea.Cmd {
+// OpenConfig opens a config file in the specified editor
+func OpenConfig(config models.ConfigEntry, editorCmd string) tea.Cmd {
+	return OpenPath(config.Path, editorCmd, config.Name)
+}
+
+// OpenPath opens any path in the specified editor
+func OpenPath(path, editorCmd, label string) tea.Cmd {
 	return func() tea.Msg {
-		expandedPath := ExpandPath(config.Path)
+		expandedPath := ExpandPath(path)
 
-		// Check if file exists
-		if !FileExists(config.Path) {
+		if !FileExists(path) {
 			return editorFinishedMsg{
-				err:  fmt.Errorf("file not found: %s", expandedPath),
-				name: config.Name,
+				err:  fmt.Errorf("path not found: %s", expandedPath),
+				name: label,
 			}
 		}
 
-		// Find available editor
-		editor := FindAvailableEditor()
-		if editor == nil {
+		if _, err := exec.LookPath(editorCmd); err != nil {
 			return editorFinishedMsg{
-				err:  fmt.Errorf("no suitable editor found (tried: code, nvim, vim, nano, vi)"),
-				name: config.Name,
+				err:  fmt.Errorf("editor '%s' not found in PATH", editorCmd),
+				name: label,
 			}
 		}
 
-		// For terminal editors, we need to use tea.ExecProcess
-		// For GUI editors, we can use regular exec
-		if editor.IsTerminal {
-			cmd := exec.Command(editor.Command, expandedPath)
+		isTerminal := terminalEditors[editorCmd]
+
+		if isTerminal {
+			cmd := exec.Command(editorCmd, expandedPath)
 			return tea.ExecProcess(cmd, func(err error) tea.Msg {
-				return editorFinishedMsg{err: err, name: config.Name}
+				return editorFinishedMsg{err: err, name: label}
 			})
-		} else {
-			// GUI editor - start in background
-			cmd := exec.Command(editor.Command, expandedPath)
-			err := cmd.Start()
-			return editorFinishedMsg{err: err, name: config.Name}
 		}
+
+		cmd := exec.Command(editorCmd, expandedPath)
+		err := cmd.Start()
+		return editorFinishedMsg{err: err, name: label}
 	}
 }
 
@@ -135,9 +84,9 @@ func OpenConfig(config models.ConfigEntry) tea.Cmd {
 func HandleEditorFinished(msg tea.Msg) (string, bool) {
 	if m, ok := msg.(editorFinishedMsg); ok {
 		if m.err != nil {
-			return fmt.Sprintf("❌ Failed to open %s: %v", m.name, m.err), true
+			return fmt.Sprintf("Failed to open %s: %v", m.name, m.err), true
 		}
-		return fmt.Sprintf("📝 Opened %s in editor", m.name), true
+		return fmt.Sprintf("Opened %s in editor", m.name), true
 	}
 	return "", false
 }

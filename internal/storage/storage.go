@@ -8,12 +8,13 @@ import (
 	"sort"
 	"strings"
 
-	"configly/internal/models"
+	"github.com/LFroesch/zap/internal/models"
 )
 
 // Storage handles config file persistence
 type Storage struct {
 	filePath string
+	editor   string
 }
 
 // New creates a new Storage instance
@@ -41,12 +42,13 @@ func (s *Storage) Load() ([]models.ConfigEntry, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	s.editor = manager.Editor
 	return manager.Configs, nil
 }
 
 // Save writes configs to disk atomically
 func (s *Storage) Save(configs []models.ConfigEntry) error {
-	manager := models.ConfigManager{Configs: configs}
+	manager := models.ConfigManager{Editor: s.editor, Configs: configs}
 
 	data, err := json.MarshalIndent(manager, "", "  ")
 	if err != nil {
@@ -152,6 +154,19 @@ func SortByPath(configs []models.ConfigEntry) []models.ConfigEntry {
 	})
 
 	return sorted
+}
+
+// GetEditor returns the configured editor command (defaults to "code")
+func (s *Storage) GetEditor() string {
+	if s.editor == "" {
+		return "code"
+	}
+	return s.editor
+}
+
+// GetFilePath returns the path to the config file
+func (s *Storage) GetFilePath() string {
+	return s.filePath
 }
 
 // FindDuplicates checks if a config with the same path already exists
