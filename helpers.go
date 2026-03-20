@@ -80,10 +80,8 @@ func (m *model) loadEditField() {
 	case 1:
 		value = config.Project
 	case 2:
-		value = config.Type
-	case 3:
 		value = config.Path
-	case 4:
+	case 3:
 		value = config.Description
 	}
 
@@ -106,15 +104,12 @@ func (m *model) saveEdit() error {
 		m.configs[m.editRow].Name = value
 	case 1: // Project
 		m.configs[m.editRow].Project = value
-	case 2: // Type
-		m.configs[m.editRow].Type = value
-	case 3: // Path
+	case 2: // Path
 		if value == "" {
 			return fmt.Errorf("path cannot be empty")
 		}
 		expandedPath := editor.ExpandPath(value)
 
-		// Check for duplicates (only when adding or changing path)
 		if m.mode == ModeAdd || m.configs[m.editRow].Path != expandedPath {
 			if dup := storage.FindDuplicates(m.configs, expandedPath); dup != nil && !dup.Equals(&m.configs[m.editRow]) {
 				return fmt.Errorf("file already registered as '%s'", dup.Name)
@@ -123,11 +118,11 @@ func (m *model) saveEdit() error {
 
 		m.configs[m.editRow].Path = expandedPath
 
-		// Auto-detect file type if not set or is default
+		// Auto-detect file type
 		if m.configs[m.editRow].Type == "" || m.configs[m.editRow].Type == "txt" {
 			m.configs[m.editRow].Type = models.DetectFileType(expandedPath)
 		}
-	case 4: // Description
+	case 3: // Description
 		m.configs[m.editRow].Description = value
 	}
 
@@ -170,9 +165,7 @@ func (m *model) getSortedConfigs() []models.ConfigEntry {
 		sorted = storage.SortByRecentlyOpened(m.configs)
 	case 2: // Name
 		sorted = storage.SortByName(m.configs)
-	case 3: // Type
-		sorted = storage.SortByType(m.configs)
-	case 4: // Path
+	case 3: // Path
 		sorted = storage.SortByPath(m.configs)
 	default:
 		sorted = storage.SortConfigs(m.configs)
@@ -264,22 +257,6 @@ func (m *model) buildDisplayList() {
 				configIndex: -1,
 			})
 			lastProject = displayProject
-		}
-
-		// Add type header when sorting by type (mode 3)
-		if m.sortMode == 3 {
-			displayType := config.Type
-			if displayType == "" {
-				displayType = "unknown"
-			}
-			if displayType != lastProject { // Reuse lastProject var to track last type
-				m.displayConfigs = append(m.displayConfigs, displayConfig{
-					isHeader:    true,
-					headerText:  fmt.Sprintf("📄 %s", displayType),
-					configIndex: -1,
-				})
-				lastProject = displayType
-			}
 		}
 
 		// Add config entry

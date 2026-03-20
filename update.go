@@ -120,11 +120,12 @@ func (m model) updateEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cancelEdit()
 		return m, nil
 	case "enter":
+		wasAdding := m.mode == ModeAdd
 		if err := m.saveEdit(); err != nil {
 			return m, showStatus(fmt.Sprintf("Failed to save: %v", err))
 		}
 		m.cancelEdit()
-		if m.mode == ModeAdd {
+		if wasAdding {
 			return m, showStatus("File added")
 		}
 		return m, showStatus("File updated")
@@ -132,14 +133,14 @@ func (m model) updateEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if err := m.saveEdit(); err != nil {
 			return m, showStatus(fmt.Sprintf("Failed to save: %v", err))
 		}
-		m.editCol = (m.editCol + 1) % 5
+		m.editCol = (m.editCol + 1) % 4
 		m.loadEditField()
 		return m, nil
 	case "shift+tab":
 		if err := m.saveEdit(); err != nil {
 			return m, showStatus(fmt.Sprintf("Failed to save: %v", err))
 		}
-		m.editCol = (m.editCol - 1 + 5) % 5
+		m.editCol = (m.editCol - 1 + 4) % 4
 		m.loadEditField()
 		return m, nil
 	}
@@ -165,10 +166,10 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "S":
-		m.sortMode = (m.sortMode + 1) % 5
+		m.sortMode = (m.sortMode + 1) % 4
 		m.cacheValid = false
 		m.buildDisplayList()
-		sortNames := []string{"Project", "Recent", "Name", "Type", "Path"}
+		sortNames := []string{"Project", "Recent", "Name", "Path"}
 		return m, showStatus(fmt.Sprintf("Sorted by %s", sortNames[m.sortMode]))
 
 	case "e":

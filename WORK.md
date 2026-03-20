@@ -1,11 +1,17 @@
-# work.md
+# Zap — Work Log
 
-## current issues
+## Current Phase
+Stable. No open bugs.
 
-- refresh after adding
-- weird space usage
+## Current Tasks
+| # | Task | Status | Notes |
+|---|------|--------|-------|
 
-- Unnecessary file "type"
-- move title stuff to title layer
-- keybindings / help menu etc like ../scout, correct stylings, scrolling, mouse input
-- finish distribution stuff
+## Backlog / Feature Ideas
+| Priority | Task | Notes |
+|----------|------|-------|
+
+## DevLog
+### 2026-03-20: Bug fixes + cleanup
+Fixed add-mode refresh bug (`cancelEdit()` reset mode before check), editor detection now respects $EDITOR, removed type column, dropped sort-by-type (4 sort modes now: Project, Recent, Name, Path), tightened layout spacing. Edit fields: 4 fields (Name, Project, Path, Description) instead of 5.
+Files: update.go, view.go, helpers.go, internal/storage/storage.go
