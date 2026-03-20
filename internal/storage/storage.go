@@ -156,12 +156,16 @@ func SortByPath(configs []models.ConfigEntry) []models.ConfigEntry {
 	return sorted
 }
 
-// GetEditor returns the configured editor command (defaults to "code")
+// GetEditor returns the configured editor command
+// Priority: config file > $EDITOR > "code"
 func (s *Storage) GetEditor() string {
-	if s.editor == "" {
-		return "code"
+	if s.editor != "" {
+		return s.editor
 	}
-	return s.editor
+	if env := os.Getenv("EDITOR"); env != "" {
+		return env
+	}
+	return "code"
 }
 
 // GetFilePath returns the path to the config file

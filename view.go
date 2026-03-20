@@ -54,8 +54,8 @@ func (m model) renderHeader() string {
 		Width(m.width)
 
 	// Create header inside the panel
-	sortIcons := []string{"📂", "🕐", "🔤", "📄", "📁"}
-	sortNames := []string{"project", "recent", "name", "type", "path"}
+	sortIcons := []string{"📂", "🕐", "🔤", "📁"}
+	sortNames := []string{"project", "recent", "name", "path"}
 
 	var searchIndicator string
 	if m.searchQuery != "" {
@@ -86,7 +86,7 @@ func (m model) renderEmptyState() string {
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Width(m.width - 2).
-		Height(availableHeight + 2)
+		Height(availableHeight)
 
 	return borderStyle.Render(combined)
 }
@@ -166,7 +166,7 @@ func (m model) renderConfigList() string {
 			name := config.Name
 			name = "- " + name
 
-			// Build line: name | project | type | path
+			// Build line: name | project | path
 			project := config.Project
 			if project == "" {
 				project = "General"
@@ -175,10 +175,9 @@ func (m model) renderConfigList() string {
 			// Format with columns
 			nameCol := truncate(name, 25)
 			projectCol := truncate(project, 15)
-			typeCol := truncate(config.Type, 10)
-			pathCol := truncate(config.Path, m.width-60)
+			pathCol := truncate(config.Path, m.width-50)
 
-			line = fmt.Sprintf("%-25s  %-15s  %-10s  %s", nameCol, projectCol, typeCol, pathCol)
+			line = fmt.Sprintf("%-25s  %-15s  %s", nameCol, projectCol, pathCol)
 
 			// Apply selection style
 			if i == m.cursor {
@@ -211,7 +210,7 @@ func (m model) renderConfigList() string {
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Width(m.width - 2).
-		Height(availableHeight + 2)
+		Height(availableHeight)
 
 	return borderStyle.Render(combined)
 }
@@ -242,7 +241,7 @@ func (m model) renderStatusBar() string {
 	// Mode-specific status
 	switch m.mode {
 	case ModeEdit, ModeAdd:
-		colNames := []string{"Name", "Project", "Type", "Path", "Description"}
+		colNames := []string{"Name", "Project", "Path", "Description"}
 		colName := colNames[m.editCol]
 
 		prefix := "✏️  Editing"
