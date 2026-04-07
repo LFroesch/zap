@@ -150,6 +150,6 @@ zap/
 │       └── styles.go
 ```
 
----
+## License
 
-Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) by Charm
+[AGPL-3.0](LICENSE)
