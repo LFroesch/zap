@@ -2,6 +2,33 @@
 
 A lightning-fast TUI file registry for developers. Organize and instantly access your most important files across all projects.
 
+## Quick Install
+
+Recommended (installs to `~/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/LFroesch/zap/main/install.sh | bash
+```
+
+Or download a binary from [GitHub Releases](https://github.com/LFroesch/zap/releases).
+
+Or install with Go:
+
+```bash
+go install github.com/LFroesch/zap@latest
+```
+
+Or build from source:
+
+```bash
+make install
+```
+
+Command:
+
+```bash
+zap
+```
 ## What is zap?
 
 zap is a personal file shortcut manager. Register files once, then open them instantly from a single interface with search, sorting, and vim-style navigation.

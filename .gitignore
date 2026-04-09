@@ -44,3 +44,7 @@ Thumbs.db
 logs/
 zap-test
 WORK.md
+# Allow release workflow even when .github is globally ignored
+!.github/
+!.github/workflows/
+!.github/workflows/release.yml
