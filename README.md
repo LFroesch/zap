@@ -31,6 +31,7 @@ Command:
 ```bash
 zap
 ```
+
 ## What is zap?
 
 zap is a personal file shortcut manager. Register files once, then open them instantly from a single interface with search, sorting, and vim-style navigation.
@@ -54,6 +55,7 @@ go install github.com/LFroesch/zap@latest
 ```
 
 Make sure `$GOPATH/bin` (usually `~/go/bin`) is in your PATH:
+
 ```bash
 export PATH="$HOME/go/bin:$PATH"
 ```
@@ -76,6 +78,7 @@ zap
 zap uses the `editor` field in `~/.config/zap/zap-registry.json` to determine which editor to use. It defaults to `code` (VS Code) if not set.
 
 To change your editor, either:
+
 - Press `,` in zap to open the config file and add/edit the `"editor"` field
 - Or edit `~/.config/zap/zap-registry.json` directly
 
@@ -87,6 +90,7 @@ To change your editor, either:
 ```
 
 Supported values include any editor command in your PATH:
+
 - `code` - VS Code (default)
 - `cursor` - Cursor
 - `nvim` - Neovim
