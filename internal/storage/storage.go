@@ -14,7 +14,6 @@ import (
 // Storage handles config file persistence
 type Storage struct {
 	filePath string
-	editor   string
 }
 
 // New creates a new Storage instance
@@ -42,13 +41,12 @@ func (s *Storage) Load() ([]models.ConfigEntry, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	s.editor = manager.Editor
 	return manager.Configs, nil
 }
 
 // Save writes configs to disk atomically
 func (s *Storage) Save(configs []models.ConfigEntry) error {
-	manager := models.ConfigManager{Editor: s.editor, Configs: configs}
+	manager := models.ConfigManager{Configs: configs}
 
 	data, err := json.MarshalIndent(manager, "", "  ")
 	if err != nil {
@@ -156,11 +154,11 @@ func SortByPath(configs []models.ConfigEntry) []models.ConfigEntry {
 	return sorted
 }
 
-// GetEditor returns the configured editor command
-// Priority: config file > $EDITOR > "code"
+// GetEditor returns the editor to use.
+// Priority: $VISUAL > $EDITOR > "code"
 func (s *Storage) GetEditor() string {
-	if s.editor != "" {
-		return s.editor
+	if env := os.Getenv("VISUAL"); env != "" {
+		return env
 	}
 	if env := os.Getenv("EDITOR"); env != "" {
 		return env

@@ -43,7 +43,7 @@ zap is a personal file shortcut manager. Register files once, then open them ins
 - **Search** - Live search across all file metadata
 - **5 sort modes** - Project, Recent, Name, Type, Path
 - **Vim-style navigation** - j/k, g/G, ctrl+d/u
-- **Configurable editor** - Set your preferred editor in the config file
+- **Editor via env** - Uses `$VISUAL` / `$EDITOR`, falls back to `code`
 - **Auto file-type detection** - Detects type from extension
 - **Duplicate prevention** - Prevents registering the same file twice
 - **Atomic saves** - Config changes saved atomically to prevent corruption
@@ -75,30 +75,14 @@ zap
 
 ## Editor Configuration
 
-zap uses the `editor` field in `~/.config/zap/zap-registry.json` to determine which editor to use. It defaults to `code` (VS Code) if not set.
+zap resolves the editor via `$VISUAL` → `$EDITOR` → `code`.
 
-To change your editor, either:
-
-- Press `,` in zap to open the config file and add/edit the `"editor"` field
-- Or edit `~/.config/zap/zap-registry.json` directly
-
-```json
-{
-  "editor": "code",
-  "configs": [...]
-}
+```bash
+export EDITOR=nvim      # terminal editor
+export VISUAL=cursor    # GUI editor (checked first)
 ```
 
-Supported values include any editor command in your PATH:
-
-- `code` - VS Code (default)
-- `cursor` - Cursor
-- `nvim` - Neovim
-- `vim` - Vim
-- `nano` - Nano
-- `emacs` - Emacs
-
-Terminal editors (nvim, vim, vi, nano, emacs) run inside the TUI. GUI editors (code, cursor, etc.) launch in the background.
+Add to your `~/.zshrc` or `~/.bashrc`. Terminal editors (nvim, vim, nano, emacs) run inside the TUI; GUI editors (code, cursor, etc.) launch in the background.
 
 ## Keybindings
 
@@ -151,7 +135,6 @@ Files are registered in `~/.config/zap/zap-registry.json`. Zap doesn't move or c
 
 ```json
 {
-  "editor": "code",
   "configs": [
     {
       "name": "API Config",
