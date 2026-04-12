@@ -79,140 +79,154 @@ func (m model) renderEmptyState() string {
 
 	emptyContent := emptyStyle.Render("📋 No files registered yet.\n\n💡 Press 'n' to add your first file!")
 
-	// Combine header and content
-	combined := emptyContent
-
 	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Width(m.width - 2).
 		Height(availableHeight)
 
-	return borderStyle.Render(combined)
+	return borderStyle.Render(emptyContent)
 }
 
 func (m model) renderConfigList() string {
-	// Calculate available height
 	availableHeight := m.height - uiOverhead
 	if availableHeight < 3 {
 		availableHeight = 3
 	}
-
-	// Reserve space for scroll indicators (2 lines)
-	contentHeight := availableHeight - 2
-	if contentHeight < 1 {
-		contentHeight = 1
+	panelHeight := availableHeight - 2
+	if panelHeight < 3 {
+		panelHeight = 3
 	}
 
-	// Check if we need scroll indicators
-	hasTopIndicator := m.scrollOffset > 0
-	hasBottomIndicator := m.scrollOffset+contentHeight < len(m.displayConfigs)
-
-	// Adjust for indicators
-	actualMaxItems := contentHeight
-	if hasTopIndicator {
-		actualMaxItems--
+	leftWidth := m.width * 38 / 100
+	if leftWidth < 34 {
+		leftWidth = 34
 	}
-	if hasBottomIndicator {
-		actualMaxItems--
-	}
-	if actualMaxItems < 1 {
-		actualMaxItems = 1
+	rightWidth := m.width - leftWidth - 1
+	if rightWidth < 30 {
+		rightWidth = 30
+		leftWidth = m.width - rightWidth - 1
 	}
 
-	// Adjust scroll offset to keep cursor visible
-	if m.cursor < m.scrollOffset {
-		m.scrollOffset = m.cursor
+	leftPanel := m.renderListPanel(leftWidth, panelHeight)
+	rightPanel := m.renderDetailsPanel(rightWidth, panelHeight)
+
+	leftStyled := lipgloss.NewStyle().Height(availableHeight).Render(leftPanel)
+	rightStyled := lipgloss.NewStyle().Height(availableHeight).Render(rightPanel)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftStyled, " ", rightStyled)
+}
+
+func (m model) renderListPanel(width, panelHeight int) string {
+	innerWidth := width - 4
+	if innerWidth < 12 {
+		innerWidth = 12
 	}
-	if m.cursor >= m.scrollOffset+actualMaxItems {
-		m.scrollOffset = m.cursor - actualMaxItems + 1
-	}
-
-	// Recalculate scroll indicators
-	hasTopIndicator = m.scrollOffset > 0
-	hasBottomIndicator = m.scrollOffset+actualMaxItems < len(m.displayConfigs)
-
-	listStyle := lipgloss.NewStyle().
-		Padding(0, 1)
-
 	var items []string
+	items = append(items, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("117")).Render("Files"))
+	items = append(items, "")
 
-	// Add top scroll indicator
-	if hasTopIndicator {
-		items = append(items, "▲ more files above...")
+	maxVisible := panelHeight - len(items)
+	// Match sb behavior: keep one row available for potential bottom indicator
+	// so visible entries never get clipped when indicator appears.
+	maxVisible--
+	if maxVisible < 1 {
+		maxVisible = 1
 	}
 
-	// Calculate visible range
-	startIdx := m.scrollOffset
-	endIdx := m.scrollOffset + actualMaxItems
-	if endIdx > len(m.displayConfigs) {
-		endIdx = len(m.displayConfigs)
+	totalRows := len(m.displayConfigs)
+	startIdx := 0
+	if m.cursor >= maxVisible {
+		startIdx = m.cursor - maxVisible + 1
+	}
+	maxStart := totalRows - maxVisible
+	if maxStart < 0 {
+		maxStart = 0
+	}
+	if startIdx > maxStart {
+		startIdx = maxStart
+	}
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := startIdx + maxVisible
+	if endIdx > totalRows {
+		endIdx = totalRows
 	}
 
-	// Render visible items
 	for i := startIdx; i < endIdx && i < len(m.displayConfigs); i++ {
 		display := m.displayConfigs[i]
 
-		var line string
 		if display.isHeader {
-			// Render header
-			headerStyle := lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("214"))
-			line = headerStyle.Render(display.headerText)
-		} else {
-			// Render config entry
-			config := display.config
-			name := config.Name
-			name = "- " + name
-
-			// Build line: name | project | path
-			project := config.Project
-			if project == "" {
-				project = "General"
-			}
-
-			// Format with columns
-			nameCol := truncate(name, 25)
-			projectCol := truncate(project, 15)
-			pathCol := truncate(config.Path, m.width-50)
-
-			line = fmt.Sprintf("%-25s  %-15s  %s", nameCol, projectCol, pathCol)
-
-			// Apply selection style
-			if i == m.cursor {
-				selectedStyle := lipgloss.NewStyle().
-					Background(lipgloss.Color("214")).
-					Foreground(lipgloss.Color("230"))
-				line = selectedStyle.Render(line)
-			} else {
-				normalStyle := lipgloss.NewStyle().
-					Foreground(lipgloss.Color("252"))
-				line = normalStyle.Render(line)
-			}
+			header := truncate(display.headerText, innerWidth)
+			line := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214")).Render(header)
+			items = append(items, line)
+			continue
 		}
 
-		items = append(items, line)
+		config := display.config
+		name := config.Name
+		rawLine := name
+		rawLine = truncate(rawLine, innerWidth)
+
+		if i == m.cursor {
+			items = append(items, lipgloss.NewStyle().
+				Foreground(lipgloss.Color("230")).
+				Background(lipgloss.Color("62")).
+				Width(innerWidth).
+				Render(rawLine))
+		} else {
+			line := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Render(rawLine)
+			items = append(items, lipgloss.NewStyle().Width(innerWidth).Render(line))
+		}
 	}
 
-	// Add bottom scroll indicator
-	if hasBottomIndicator {
-		items = append(items, "▼ more files below...")
+	if startIdx > 0 && len(items) > 1 {
+		items[1] = lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Render(fmt.Sprintf("▲ %d more", startIdx))
+	}
+	if endIdx < totalRows {
+		items = append(items, lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Render(fmt.Sprintf("▼ %d more", totalRows-endIdx)))
 	}
 
-	fileList := listStyle.Render(strings.Join(items, "\n"))
+	for len(items) < panelHeight {
+		items = append(items, "")
+	}
 
-	// Combine header and file list
-	combined := fileList
+	panelContent := strings.Join(items[:panelHeight], "\n")
 
-	// Combine with border
-	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("117")).
+		Padding(0, 1).
+		Width(width - 2).
+		Height(panelHeight).
+		Render(panelContent)
+}
+
+func (m model) renderDetailsPanel(width, panelHeight int) string {
+	contentWidth := width - 4
+	if contentWidth < 12 {
+		contentWidth = 12
+	}
+
+	var panelContent string
+	if m.mode == ModeFileEdit {
+		header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("117")).Render("Editing") +
+			lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("  ctrl+s save · ctrl+d del line · esc cancel")
+		panelContent = lipgloss.JoinVertical(lipgloss.Left, header, "", m.fileEditArea.View())
+	} else {
+		m.rightViewport.Width = contentWidth
+		m.rightViewport.Height = panelHeight
+		panelContent = m.rightViewport.View()
+	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
-		Width(m.width - 2).
-		Height(availableHeight)
-
-	return borderStyle.Render(combined)
+		Padding(0, 1).
+		Width(width - 2).
+		Height(panelHeight).
+		Render(panelContent)
 }
 
 func (m model) renderStatusBar() string {
@@ -254,6 +268,12 @@ func (m model) renderStatusBar() string {
 			orangeStyle.Render("enter") + whiteStyle.Render(": save | ") +
 			orangeStyle.Render("esc") + whiteStyle.Render(": cancel")
 
+	case ModeFileEdit:
+		statusText = orangeStyle.Render("Editing file inline: ") + whiteStyle.Render(m.fileEditLabel)
+		rightSide = orangeStyle.Render("ctrl+s") + whiteStyle.Render(": save | ") +
+			orangeStyle.Render("ctrl+d") + whiteStyle.Render(": del line | ") +
+			orangeStyle.Render("esc") + whiteStyle.Render(": cancel")
+
 	case ModeSearch:
 		matchCount := m.getFilteredConfigsCount()
 		statusText = orangeStyle.Render("🔍 Search: ") + whiteStyle.Render(m.searchInput.View())
@@ -274,7 +294,6 @@ func (m model) renderStatusBar() string {
 	default:
 		// File count
 		if len(m.displayConfigs) > 0 {
-			// Count actual configs (not headers)
 			configCount := 0
 			for _, d := range m.displayConfigs {
 				if !d.isHeader {
@@ -286,17 +305,14 @@ func (m model) renderStatusBar() string {
 			statusText = orangeStyle.Render("0") + whiteStyle.Render(" files")
 		}
 
-		// Status message
 		if m.statusMsg != "" && time.Now().Before(m.statusExpiry) {
 			statusText += whiteStyle.Render(" | " + m.statusMsg)
 		}
 
-		// Search query indicator
 		if m.searchQuery != "" {
 			statusText += whiteStyle.Render(" | ") + orangeStyle.Render(fmt.Sprintf("🔍 '%s'", m.searchQuery))
 		}
 
-		// Commands on right
 		greenStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("82")).
 			Background(lipgloss.Color("235")).
@@ -310,7 +326,9 @@ func (m model) renderStatusBar() string {
 			Inline(true)
 
 		rightSide = greenStyle.Render("o") + whiteStyle.Render(": open | ") +
-			orangeStyle.Render("e") + whiteStyle.Render(": edit | ") +
+			greenStyle.Render("E") + whiteStyle.Render(": inline | ") +
+			orangeStyle.Render("e") + whiteStyle.Render(": meta | ") +
+			orangeStyle.Render("J/K") + whiteStyle.Render(": preview | ") +
 			orangeStyle.Render("N") + whiteStyle.Render(": add | ") +
 			redStyle.Render("D") + whiteStyle.Render(": del | ") +
 			orangeStyle.Render("y") + whiteStyle.Render(": copy | ") +

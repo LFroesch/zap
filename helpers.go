@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/LFroesch/zap/internal/editor"
@@ -39,6 +42,67 @@ func (m *model) startEdit() tea.Cmd {
 	return nil
 }
 
+func (m *model) startFileEdit() tea.Cmd {
+	config := m.getConfigByDisplayIndex(m.cursor)
+	if config == nil {
+		return showStatus("❌ No file selected")
+	}
+
+	path := editor.ExpandPath(config.Path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return showStatus(fmt.Sprintf("❌ Failed to read file: %v", err))
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return showStatus("❌ Binary files can't be edited inline")
+	}
+
+	m.mode = ModeFileEdit
+	m.fileEditPath = path
+	m.fileEditLabel = config.Name
+	m.fileEditArea.SetValue(string(data))
+	m.resizeFileEditArea()
+	for m.fileEditArea.Line() > 0 {
+		m.fileEditArea.CursorUp()
+	}
+	m.fileEditArea.CursorStart()
+	m.fileEditArea.Focus()
+	return m.fileEditArea.Cursor.BlinkCmd()
+}
+
+func (m *model) resizeFileEditArea() {
+	availableHeight := m.height - uiOverhead
+	if availableHeight < 3 {
+		availableHeight = 3
+	}
+	panelHeight := availableHeight - 2
+	if panelHeight < 3 {
+		panelHeight = 3
+	}
+
+	leftWidth := m.width * 38 / 100
+	if leftWidth < 34 {
+		leftWidth = 34
+	}
+	rightWidth := m.width - leftWidth - 1
+	if rightWidth < 30 {
+		rightWidth = 30
+		leftWidth = m.width - rightWidth - 1
+	}
+
+	contentWidth := rightWidth - 4
+	if contentWidth < 12 {
+		contentWidth = 12
+	}
+	areaHeight := panelHeight - 3
+	if areaHeight < 1 {
+		areaHeight = 1
+	}
+
+	m.fileEditArea.SetWidth(contentWidth)
+	m.fileEditArea.SetHeight(areaHeight)
+}
+
 func (m *model) addNewConfig() tea.Cmd {
 	newConfig := models.ConfigEntry{
 		Name:        "New File",
@@ -56,12 +120,14 @@ func (m *model) addNewConfig() tea.Cmd {
 	m.loadEditField()
 	m.textInput.Focus()
 	m.buildDisplayList()
+	m.refreshRightViewport()
 
 	// Move cursor to new entry
 	displayIndex := m.findConfigDisplayIndex(newConfig)
 	if displayIndex != -1 {
 		m.cursor = displayIndex
 		m.ensureCursorInBounds()
+		m.refreshRightViewport()
 	}
 
 	return showStatus("➕ Adding new file (Tab to next field, Enter to save)")
@@ -132,6 +198,7 @@ func (m *model) saveEdit() error {
 
 	m.cacheValid = false
 	m.buildDisplayList()
+	m.refreshRightViewport()
 	return nil
 }
 
@@ -150,6 +217,111 @@ func (m *model) cancelEdit() {
 	m.textInput.Blur()
 	m.textInput.SetValue("")
 	m.buildDisplayList()
+	m.refreshRightViewport()
+}
+
+func (m *model) saveFileEdit() error {
+	if m.fileEditPath == "" {
+		return fmt.Errorf("no file selected")
+	}
+
+	perm := os.FileMode(0644)
+	if info, err := os.Stat(m.fileEditPath); err == nil {
+		perm = info.Mode().Perm()
+	}
+
+	if err := os.WriteFile(m.fileEditPath, []byte(m.fileEditArea.Value()), perm); err != nil {
+		return err
+	}
+
+	m.mode = ModeNormal
+	m.fileEditArea.Blur()
+	m.fileEditPath = ""
+	m.fileEditLabel = ""
+	m.refreshRightViewport()
+	return nil
+}
+
+func (m *model) cancelFileEdit() {
+	m.mode = ModeNormal
+	m.fileEditArea.Blur()
+	m.fileEditPath = ""
+	m.fileEditLabel = ""
+	m.refreshRightViewport()
+}
+
+func (m *model) refreshRightViewport() {
+	content := m.buildRightPanelContent()
+	m.rightViewport.SetContent(content)
+	m.rightViewport.GotoTop()
+}
+
+func (m *model) buildRightPanelContent() string {
+	config := m.getConfigByDisplayIndex(m.cursor)
+	if config == nil {
+		return "No file selected"
+	}
+
+	project := config.Project
+	if project == "" {
+		project = "General"
+	}
+
+	var lines []string
+	lines = append(lines, "Name: "+config.Name)
+	lines = append(lines, "Project: "+project)
+	lines = append(lines, "Type: "+config.Type)
+	lines = append(lines, "Path: "+config.Path)
+	if config.Description != "" {
+		lines = append(lines, "Desc: "+config.Description)
+	}
+
+	lines = append(lines, "", "Preview:")
+
+	preview, err := buildPreviewLines(config.Path, 200)
+	if err != nil {
+		lines = append(lines, "  unavailable: "+err.Error())
+	} else {
+		for _, line := range preview {
+			lines = append(lines, "  "+line)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func buildPreviewLines(path string, maxBytes int64) ([]string, error) {
+	expanded := editor.ExpandPath(path)
+	info, err := os.Stat(expanded)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() {
+		return []string{"directory: " + filepath.Base(expanded)}, nil
+	}
+	if info.Size() > maxBytes*1024 {
+		return []string{"preview skipped (file > 200KB)"}, nil
+	}
+
+	data, err := os.ReadFile(expanded)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return []string{"binary file preview skipped"}, nil
+	}
+
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	rawLines := strings.Split(text, "\n")
+	if len(rawLines) == 0 {
+		return []string{"(empty file)"}, nil
+	}
+
+	if len(rawLines) > 400 {
+		rawLines = rawLines[:400]
+		rawLines = append(rawLines, "...")
+	}
+	return rawLines, nil
 }
 
 func (m *model) getSortedConfigs() []models.ConfigEntry {

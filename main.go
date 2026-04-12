@@ -7,7 +7,9 @@ import (
 
 	"github.com/LFroesch/zap/internal/storage"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -44,12 +46,18 @@ func main() {
 	m.textInput = textinput.New()
 	m.textInput.CharLimit = 300
 
+	m.fileEditArea = textarea.New()
+	m.fileEditArea.CharLimit = 0
+
 	m.searchInput = textinput.New()
 	m.searchInput.Placeholder = "Type to search..."
 	m.searchInput.CharLimit = 100
 
+	m.rightViewport = viewport.New(40, 10)
+
 	// Build initial display list
 	m.buildDisplayList()
+	m.refreshRightViewport()
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {

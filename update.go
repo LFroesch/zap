@@ -27,6 +27,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.mode == ModeFileEdit {
+			m.resizeFileEditArea()
+		}
+		m.refreshRightViewport()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -38,6 +42,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateHelp(msg)
 		case ModeEdit, ModeAdd:
 			return m.updateEdit(msg)
+		case ModeFileEdit:
+			return m.updateFileEdit(msg)
 		case ModeSearch:
 			return m.updateSearch(msg)
 		case ModeConfirmDelete:
@@ -67,6 +73,7 @@ func (m model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.cacheValid = false
 			m.buildDisplayList()
+			m.refreshRightViewport()
 			m.mode = ModeNormal
 			m.deleteIndex = -1
 			return m, showStatus(fmt.Sprintf("Deleted %s", configName))
@@ -94,6 +101,7 @@ func (m model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.Blur()
 		m.cacheValid = false
 		m.buildDisplayList()
+		m.refreshRightViewport()
 		return m, showStatus("Search cleared")
 	case "enter":
 		m.mode = ModeNormal
@@ -101,6 +109,7 @@ func (m model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.Blur()
 		m.cacheValid = false
 		m.buildDisplayList()
+		m.refreshRightViewport()
 		if m.searchQuery != "" {
 			matchCount := m.getFilteredConfigsCount()
 			return m, showStatus(fmt.Sprintf("Found %d matches", matchCount))
@@ -112,6 +121,7 @@ func (m model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.searchQuery = m.searchInput.Value()
 	m.cacheValid = false
 	m.buildDisplayList()
+	m.refreshRightViewport()
 	return m, cmd
 }
 
@@ -152,7 +162,40 @@ func (m model) updateEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m model) updateFileEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.cancelFileEdit()
+		return m, showStatus("Inline edit cancelled")
+	case "ctrl+s":
+		if err := m.saveFileEdit(); err != nil {
+			return m, showStatus(fmt.Sprintf("Save failed: %v", err))
+		}
+		return m, showStatus("File saved")
+	case "ctrl+d":
+		// Delete current line and keep cursor on the same logical line index.
+		value := m.fileEditArea.Value()
+		lineNum := m.fileEditArea.Line()
+		lines := strings.Split(value, "\n")
+		if lineNum < len(lines) {
+			newLines := append(lines[:lineNum], lines[lineNum+1:]...)
+			m.fileEditArea.SetValue(strings.Join(newLines, "\n"))
+			for i := 0; i < len(newLines)-1-lineNum; i++ {
+				m.fileEditArea.CursorUp()
+			}
+			m.fileEditArea.CursorStart()
+		}
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.fileEditArea, cmd = m.fileEditArea.Update(msg)
+	return m, cmd
+}
+
 func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	prevCursor := m.cursor
+
 	switch msg.String() {
 	case "q":
 		return m, tea.Quit
@@ -172,11 +215,15 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.sortMode = (m.sortMode + 1) % 4
 		m.cacheValid = false
 		m.buildDisplayList()
+		m.refreshRightViewport()
 		sortNames := []string{"Project", "Recent", "Name", "Path"}
 		return m, showStatus(fmt.Sprintf("Sorted by %s", sortNames[m.sortMode]))
 
 	case "e":
 		return m, m.startEdit()
+
+	case "E":
+		return m, m.startFileEdit()
 
 	case "N":
 		return m, m.addNewConfig()
@@ -204,9 +251,11 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						m.configs[i].LastOpened = time.Now()
 						m.storage.Save(m.configs)
 						m.cacheValid = false
+						m.buildDisplayList()
 						break
 					}
 				}
+				m.refreshRightViewport()
 				return m, editor.OpenConfig(*config, m.editor)
 			}
 		}
@@ -248,39 +297,62 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.editor = m.storage.GetEditor()
 		m.cacheValid = false
 		m.buildDisplayList()
+		m.refreshRightViewport()
 		return m, showStatus("Refreshed")
 
 	case "k", "up":
 		m.moveCursorUp()
-		return m, nil
 
 	case "j", "down":
 		m.moveCursorDown()
-		return m, nil
 
 	case "g":
 		m.cursor = 0
 		m.ensureCursorInBounds()
-		return m, nil
 
 	case "G":
 		m.cursor = len(m.displayConfigs) - 1
 		m.ensureCursorInBounds()
-		return m, nil
 
 	case "ctrl+u":
 		pageSize := (m.height - uiOverhead) / 2
 		for i := 0; i < pageSize; i++ {
 			m.moveCursorUp()
 		}
-		return m, nil
 
 	case "ctrl+d":
 		pageSize := (m.height - uiOverhead) / 2
 		for i := 0; i < pageSize; i++ {
 			m.moveCursorDown()
 		}
+
+	case "J", "s":
+		m.rightViewport.LineDown(3)
 		return m, nil
+
+	case "K", "w":
+		m.rightViewport.LineUp(3)
+		return m, nil
+
+	case "pgdown":
+		m.rightViewport.ViewDown()
+		return m, nil
+
+	case "pgup":
+		m.rightViewport.ViewUp()
+		return m, nil
+
+	case "ctrl+home":
+		m.rightViewport.GotoTop()
+		return m, nil
+
+	case "ctrl+end":
+		m.rightViewport.GotoBottom()
+		return m, nil
+	}
+
+	if m.cursor != prevCursor {
+		m.refreshRightViewport()
 	}
 
 	return m, nil

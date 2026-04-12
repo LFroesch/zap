@@ -41,7 +41,8 @@ zap is a personal file shortcut manager. Register files once, then open them ins
 - **Instant access** - Open any registered file in your configured editor with one keystroke
 - **Project organization** - Group files by project
 - **Search** - Live search across all file metadata
-- **5 sort modes** - Project, Recent, Name, Type, Path
+- **4 sort modes** - Project, Recent, Name, Path
+- **Dual-panel layout** - Browse files on the left with metadata + preview on the right
 - **Vim-style navigation** - j/k, g/G, ctrl+d/u
 - **Editor via env** - Uses `$VISUAL` / `$EDITOR`, falls back to `code`
 - **Auto file-type detection** - Detects type from extension
@@ -69,7 +70,7 @@ zap
 ### Quick Start
 
 1. Press `N` to add a file
-2. Tab through Name, Project, Type, Path, Description
+2. Tab through Name, Project, Path, Description
 3. Press Enter to save
 4. Navigate with j/k and press `o` or Enter to open
 
@@ -90,17 +91,21 @@ Add to your `~/.zshrc` or `~/.bashrc`. Terminal editors (nvim, vim, nano, emacs)
 
 | Key | Action |
 |-----|--------|
-| `j/k`, `up/down` | Navigate |
+| `j/k`, `up/down` | Navigate left file list |
 | `g/G` | First/last item |
-| `ctrl+d/u` | Half-page scroll |
+| `ctrl+d/u` | Half-page list scroll |
+| `J/K` | Scroll right preview pane |
+| `pgup/pgdn` | Page scroll right preview pane |
+| `ctrl+home/end` | Preview top / bottom |
 
 ### Actions
 
 | Key | Action |
 |-----|--------|
-| `enter/o` | Open file in editor |
+| `enter/o` | Open file in external editor |
+| `E` | Edit selected file inline |
 | `O` | Open parent directory in editor |
-| `e` | Edit file metadata |
+| `e` | Edit selected file metadata |
 | `N` | Add new file |
 | `D` | Delete file (confirmation) |
 | `y` | Copy path to clipboard |
@@ -111,7 +116,7 @@ Add to your `~/.zshrc` or `~/.bashrc`. Terminal editors (nvim, vim, nano, emacs)
 | Key | Action |
 |-----|--------|
 | `/` | Search |
-| `S` | Cycle sort: Project/Recent/Name/Type/Path |
+| `S` | Cycle sort: Project/Recent/Name/Path |
 
 ### Edit Mode
 
@@ -119,6 +124,14 @@ Add to your `~/.zshrc` or `~/.bashrc`. Terminal editors (nvim, vim, nano, emacs)
 |-----|--------|
 | `tab/shift+tab` | Next/previous field |
 | `enter` | Save |
+| `esc` | Cancel |
+
+### Inline File Edit Mode
+
+| Key | Action |
+|-----|--------|
+| `ctrl+s` | Save file |
+| `ctrl+d` | Delete current line |
 | `esc` | Cancel |
 
 ### System
