@@ -12,6 +12,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// reposViewMsg is a no-op message used to trigger textarea.repositionView()
+// after manual cursor navigation (CursorUp/CursorDown don't update the viewport).
+type reposViewMsg struct{}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle editor finished messages globally
 	if statusStr, ok := editor.HandleEditorFinished(msg); ok {
@@ -56,8 +60,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) updateHelp(_ tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.mode = ModeNormal
+func (m model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	pageSize := m.helpPageSize()
+
+	switch msg.String() {
+	case "esc", "?", "q":
+		m.mode = ModeNormal
+		m.helpScroll = 0
+	case "up", "w", "k", "pgup":
+		if msg.String() == "pgup" {
+			m.helpScroll -= pageSize
+		} else {
+			m.helpScroll--
+		}
+	case "down", "s", "j", "pgdn":
+		if msg.String() == "pgdn" {
+			m.helpScroll += pageSize
+		} else {
+			m.helpScroll++
+		}
+	case "g", "home":
+		m.helpScroll = 0
+	case "G", "end":
+		m.helpScroll = m.maxHelpScroll()
+	}
+
+	if m.helpScroll < 0 {
+		m.helpScroll = 0
+	}
+	maxScroll := m.maxHelpScroll()
+	if m.helpScroll > maxScroll {
+		m.helpScroll = maxScroll
+	}
+
 	return m, nil
 }
 
@@ -173,17 +208,27 @@ func (m model) updateFileEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, showStatus("File saved")
 	case "ctrl+d":
-		// Delete current line and keep cursor on the same logical line index.
+		// Delete current line, reposition cursor to the same line number.
 		value := m.fileEditArea.Value()
 		lineNum := m.fileEditArea.Line()
 		lines := strings.Split(value, "\n")
 		if lineNum < len(lines) {
 			newLines := append(lines[:lineNum], lines[lineNum+1:]...)
 			m.fileEditArea.SetValue(strings.Join(newLines, "\n"))
-			for i := 0; i < len(newLines)-1-lineNum; i++ {
+			// SetValue leaves cursor at end; move up to target line.
+			target := lineNum
+			if target >= len(newLines) {
+				target = len(newLines) - 1
+			}
+			if target < 0 {
+				target = 0
+			}
+			for i := 0; i < len(newLines)-1-target; i++ {
 				m.fileEditArea.CursorUp()
 			}
 			m.fileEditArea.CursorStart()
+			// CursorUp doesn't call repositionView; pass a no-op msg to trigger it.
+			m.fileEditArea, _ = m.fileEditArea.Update(reposViewMsg{})
 		}
 		return m, nil
 	}

@@ -10,8 +10,10 @@ import (
 	"github.com/LFroesch/zap/internal/editor"
 	"github.com/LFroesch/zap/internal/models"
 	"github.com/LFroesch/zap/internal/storage"
+	"github.com/LFroesch/zap/internal/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type statusMsg struct {
@@ -101,6 +103,29 @@ func (m *model) resizeFileEditArea() {
 
 	m.fileEditArea.SetWidth(contentWidth)
 	m.fileEditArea.SetHeight(areaHeight)
+}
+
+func (m model) helpPageSize() int {
+	availableHeight := m.height - uiOverhead
+	if availableHeight < 3 {
+		availableHeight = 3
+	}
+
+	pageSize := availableHeight - 7
+	if pageSize < 1 {
+		pageSize = 1
+	}
+
+	return pageSize
+}
+
+func (m model) maxHelpScroll() int {
+	totalLines := ui.HelpLineCount()
+	pageSize := m.helpPageSize()
+	if totalLines <= pageSize {
+		return 0
+	}
+	return totalLines - pageSize
 }
 
 func (m *model) addNewConfig() tea.Cmd {
@@ -276,7 +301,7 @@ func (m *model) buildRightPanelContent() string {
 		lines = append(lines, "Desc: "+config.Description)
 	}
 
-	lines = append(lines, "", "Preview:")
+	lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true).Render("Preview:"))
 
 	preview, err := buildPreviewLines(config.Path, 200)
 	if err != nil {

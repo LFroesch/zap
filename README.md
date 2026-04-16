@@ -142,6 +142,15 @@ Add to your `~/.zshrc` or `~/.bashrc`. Terminal editors (nvim, vim, nano, emacs)
 | `?` | Help |
 | `q/ctrl+c` | Quit |
 
+### Help Mode
+
+| Key | Action |
+|-----|--------|
+| `j/k`, `up/down` | Scroll help |
+| `pgup/pgdn` | Page scroll help |
+| `g/G` | Top/bottom of help |
+| `esc`, `?`, `q` | Close help |
+
 ## File Storage
 
 Files are registered in `~/.config/zap/zap-registry.json`. Zap doesn't move or copy your files - it creates shortcuts to them.

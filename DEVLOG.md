@@ -1,4 +1,8 @@
 ## DevLog
+### 2026-04-15: Scrollable bounded help view
+Reworked help mode so it renders inside the normal app layout instead of overflowing the terminal. The help body now scrolls with `j/k`, `pgup/pgdn`, and `g/G` while keeping the main header and footer visible.
+Files: model.go, update.go, view.go, helpers.go, internal/ui/help.go, README.md, WORK.md
+
 ### 2026-03-23: Doc suite added
 Added CLAUDE.md, agent_spec.md. Updated WORK.md with feature ideas. Added license reference to README.
 

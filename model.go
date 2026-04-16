@@ -42,6 +42,9 @@ type model struct {
 	// Mode management
 	mode ViewMode
 
+	// Help mode
+	helpScroll int
+
 	// Edit mode
 	editRow       int
 	editCol       int

@@ -17,7 +17,12 @@ func (m model) View() string {
 
 	// Help mode
 	if m.mode == ModeHelp {
-		return ui.HelpScreen(m.width, m.height)
+		content := lipgloss.JoinVertical(lipgloss.Left,
+			m.renderHeader(),
+			m.renderHelpPanel(),
+			m.renderStatusBar(),
+		)
+		return content
 	}
 
 	// Build header
@@ -115,6 +120,15 @@ func (m model) renderConfigList() string {
 	rightStyled := lipgloss.NewStyle().Height(availableHeight).Render(rightPanel)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftStyled, " ", rightStyled)
+}
+
+func (m model) renderHelpPanel() string {
+	availableHeight := m.height - uiOverhead
+	if availableHeight < 3 {
+		availableHeight = 3
+	}
+
+	return ui.HelpPanel(m.width, availableHeight, m.helpScroll)
 }
 
 func (m model) renderListPanel(width, panelHeight int) string {
@@ -280,6 +294,16 @@ func (m model) renderStatusBar() string {
 		rightSide = whiteStyle.Render(fmt.Sprintf("%d matches | ", matchCount)) +
 			orangeStyle.Render("enter") + whiteStyle.Render(": apply | ") +
 			orangeStyle.Render("esc") + whiteStyle.Render(": cancel")
+
+	case ModeHelp:
+		statusText = orangeStyle.Render("Help")
+		if maxScroll := m.maxHelpScroll(); maxScroll > 0 {
+			statusText += whiteStyle.Render(fmt.Sprintf(" | line %d/%d", m.helpScroll+1, maxScroll+1))
+		}
+		rightSide = orangeStyle.Render("j/k") + whiteStyle.Render(": scroll | ") +
+			orangeStyle.Render("pgup/pgdn") + whiteStyle.Render(": page | ") +
+			orangeStyle.Render("g/G") + whiteStyle.Render(": top/bottom | ") +
+			orangeStyle.Render("esc/?/q") + whiteStyle.Render(": close")
 
 	case ModeConfirmDelete:
 		statusText = lipgloss.NewStyle().
