@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,7 +15,21 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "Print version and exit")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "zap — Lightning-fast TUI file registry for developers\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: zap [flags]\n\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+	if *showVersion {
+		fmt.Println("zap " + version)
+		os.Exit(0)
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatal(err)
