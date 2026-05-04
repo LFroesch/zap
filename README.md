@@ -43,6 +43,7 @@ zap is a personal file shortcut manager. Register files once, then open them ins
 - **Search** - Live search across all file metadata
 - **4 sort modes** - Project, Recent, Name, Path
 - **Dual-panel layout** - Browse files on the left with metadata + preview on the right
+- **Responsive terminal sizing** - Fills the current terminal viewport and adapts cleanly on resize
 - **Vim-style navigation** - j/k, g/G, ctrl+d/u
 - **Editor via env** - Uses `$VISUAL` / `$EDITOR`, falls back to `code`
 - **Auto file-type detection** - Detects type from extension

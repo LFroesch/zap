@@ -360,13 +360,13 @@ func (m model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.ensureCursorInBounds()
 
 	case "ctrl+u":
-		pageSize := (m.height - uiOverhead) / 2
+		pageSize := m.mainContentHeight() / 2
 		for i := 0; i < pageSize; i++ {
 			m.moveCursorUp()
 		}
 
 	case "ctrl+d":
-		pageSize := (m.height - uiOverhead) / 2
+		pageSize := m.mainContentHeight() / 2
 		for i := 0; i < pageSize; i++ {
 			m.moveCursorDown()
 		}

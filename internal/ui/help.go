@@ -7,6 +7,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const helpReservedLines = 4
+
+func helpPanelStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("117")).
+		Padding(0, 1)
+}
+
 func helpLines() []string {
 	return []string{
 		"Navigation",
@@ -52,6 +61,16 @@ func HelpLineCount() int {
 	return len(helpLines())
 }
 
+// HelpBodyHeight returns the visible scrollable body height for a help panel
+// constrained to the given total height.
+func HelpBodyHeight(totalHeight int) int {
+	bodyHeight := totalHeight - helpPanelStyle().GetVerticalFrameSize() - helpReservedLines
+	if bodyHeight < 1 {
+		bodyHeight = 1
+	}
+	return bodyHeight
+}
+
 // HelpPanel renders a bounded help view that preserves the app header/footer.
 func HelpPanel(width, height, scroll int) string {
 	titleStyle := lipgloss.NewStyle().
@@ -72,10 +91,8 @@ func HelpPanel(width, height, scroll int) string {
 	footerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("243"))
 
-	bodyHeight := height - 4
-	if bodyHeight < 3 {
-		bodyHeight = 3
-	}
+	panelStyle := helpPanelStyle()
+	bodyHeight := HelpBodyHeight(height)
 
 	lines := helpLines()
 	maxScroll := 0
@@ -135,11 +152,8 @@ func HelpPanel(width, height, scroll int) string {
 		footerStyle.Render(scrollHint),
 	)
 
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("117")).
-		Padding(0, 1).
-		Width(width - 2).
-		Height(height).
+	return panelStyle.
+		Width(width - panelStyle.GetHorizontalFrameSize()).
+		Height(height - panelStyle.GetVerticalFrameSize()).
 		Render(panelContent)
 }

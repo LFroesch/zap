@@ -73,10 +73,7 @@ func (m model) renderHeader() string {
 }
 
 func (m model) renderEmptyState() string {
-	availableHeight := m.height - uiOverhead
-	if availableHeight < 3 {
-		availableHeight = 3
-	}
+	availableHeight := m.mainContentHeight()
 
 	emptyStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("244")).
@@ -94,10 +91,7 @@ func (m model) renderEmptyState() string {
 }
 
 func (m model) renderConfigList() string {
-	availableHeight := m.height - uiOverhead
-	if availableHeight < 3 {
-		availableHeight = 3
-	}
+	availableHeight := m.mainContentHeight()
 	panelHeight := availableHeight - 2
 	if panelHeight < 3 {
 		panelHeight = 3
@@ -123,12 +117,7 @@ func (m model) renderConfigList() string {
 }
 
 func (m model) renderHelpPanel() string {
-	availableHeight := m.height - uiOverhead
-	if availableHeight < 3 {
-		availableHeight = 3
-	}
-
-	return ui.HelpPanel(m.width, availableHeight, m.helpScroll)
+	return ui.HelpPanel(m.width, m.mainContentHeight(), m.helpScroll)
 }
 
 func (m model) renderListPanel(width, panelHeight int) string {

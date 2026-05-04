@@ -26,6 +26,24 @@ func showStatus(msg string) tea.Cmd {
 	}
 }
 
+func (m model) headerHeight() int {
+	return 1
+}
+
+func (m model) statusBarHeight() int {
+	return 1
+}
+
+func (m model) mainContentHeight() int {
+	// Header and status are single-line bars. Avoid rendering them here because
+	// help mode status text depends on help sizing, which would recurse.
+	height := m.height - m.headerHeight() - m.statusBarHeight()
+	if height < 3 {
+		return 3
+	}
+	return height
+}
+
 func (m *model) startEdit() tea.Cmd {
 	if len(m.configs) == 0 {
 		return showStatus("❌ No files to edit")
@@ -73,10 +91,7 @@ func (m *model) startFileEdit() tea.Cmd {
 }
 
 func (m *model) resizeFileEditArea() {
-	availableHeight := m.height - uiOverhead
-	if availableHeight < 3 {
-		availableHeight = 3
-	}
+	availableHeight := m.mainContentHeight()
 	panelHeight := availableHeight - 2
 	if panelHeight < 3 {
 		panelHeight = 3
@@ -106,17 +121,7 @@ func (m *model) resizeFileEditArea() {
 }
 
 func (m model) helpPageSize() int {
-	availableHeight := m.height - uiOverhead
-	if availableHeight < 3 {
-		availableHeight = 3
-	}
-
-	pageSize := availableHeight - 7
-	if pageSize < 1 {
-		pageSize = 1
-	}
-
-	return pageSize
+	return ui.HelpBodyHeight(m.mainContentHeight())
 }
 
 func (m model) maxHelpScroll() int {

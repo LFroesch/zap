@@ -24,10 +24,6 @@ const (
 	ModeConfirmDelete
 )
 
-const (
-	uiOverhead = 9 // Header (1) + status (1) + borders (4) + padding (3)
-)
-
 type model struct {
 	configs []models.ConfigEntry
 	storage *storage.Storage
