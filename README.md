@@ -50,23 +50,7 @@ zap is a personal file shortcut manager. Register files once, then open them ins
 - **Duplicate prevention** - Prevents registering the same file twice
 - **Atomic saves** - Config changes saved atomically to prevent corruption
 
-## Installation
-
-```bash
-go install github.com/LFroesch/zap@latest
-```
-
-Make sure `$GOPATH/bin` (usually `~/go/bin`) is in your PATH:
-
-```bash
-export PATH="$HOME/go/bin:$PATH"
-```
-
 ## Usage
-
-```bash
-zap
-```
 
 ### Quick Start
 
