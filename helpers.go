@@ -98,12 +98,12 @@ func (m *model) resizeFileEditArea() {
 	}
 
 	leftWidth := m.width * 38 / 100
-	if leftWidth < 34 {
-		leftWidth = 34
+	if leftWidth < 18 {
+		leftWidth = 18
 	}
 	rightWidth := m.width - leftWidth - 1
-	if rightWidth < 30 {
-		rightWidth = 30
+	if rightWidth < 12 {
+		rightWidth = 12
 		leftWidth = m.width - rightWidth - 1
 	}
 
