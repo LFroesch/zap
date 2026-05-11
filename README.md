@@ -1,6 +1,8 @@
 # zap
 
-Personal file registry for the terminal. `zap` lets you register important files once, organize them by project, preview them quickly, and reopen them in your editor without hunting through directories.
+Personal file registry for the terminal. `zap` lets you register important files once, organize them by project, preview them quickly, and reopen them without hunting through directories every time.
+
+![zap hero screenshot](assets/screenshots/hero.png)
 
 ## Install
 
