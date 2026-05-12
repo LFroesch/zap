@@ -67,7 +67,7 @@ func (m model) renderHeader() string {
 		searchIndicator = " [searching]"
 	}
 
-	title := "⚡ zap - files registry" + fmt.Sprintf(" [%s %s]%s", sortIcons[m.sortMode], sortNames[m.sortMode], searchIndicator)
+	title := "⚡ zap " + version + " - files registry" + fmt.Sprintf(" [%s %s]%s", sortIcons[m.sortMode], sortNames[m.sortMode], searchIndicator)
 
 	return titleStyle.Render(title)
 }
