@@ -19,7 +19,7 @@ func TestHelpViewRenders(t *testing.T) {
 	if view == "" {
 		t.Fatal("expected help view to render content")
 	}
-	if !strings.Contains(view, "zap - files registry") {
+	if !strings.Contains(view, "files registry") {
 		t.Fatal("expected top header to remain visible in help mode")
 	}
 	if got := lipgloss.Height(view); got > m.height {

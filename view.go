@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LFroesch/tui-suite/suitechrome"
 	"github.com/LFroesch/zap/internal/ui"
 
 	"github.com/charmbracelet/lipgloss"
@@ -50,15 +51,6 @@ func (m model) View() string {
 }
 
 func (m model) renderHeader() string {
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Inline(true).
-		Foreground(lipgloss.Color("214")).
-		Background(lipgloss.Color("235")).
-		Padding(0, 1).
-		Width(m.width)
-
-	// Create header inside the panel
 	sortIcons := []string{"📂", "🕐", "🔤", "📁"}
 	sortNames := []string{"project", "recent", "name", "path"}
 
@@ -67,9 +59,9 @@ func (m model) renderHeader() string {
 		searchIndicator = " [searching]"
 	}
 
-	title := "⚡ zap " + version + " - files registry" + fmt.Sprintf(" [%s %s]%s", sortIcons[m.sortMode], sortNames[m.sortMode], searchIndicator)
-
-	return titleStyle.Render(title)
+	left := suitechrome.RenderTitle("zap", version) + " - files registry"
+	right := fmt.Sprintf("[%s %s]%s", sortIcons[m.sortMode], sortNames[m.sortMode], searchIndicator)
+	return suitechrome.JoinHeader(m.width, left, suitechrome.Dim(right))
 }
 
 func (m model) renderEmptyState() string {
@@ -233,27 +225,21 @@ func (m model) renderDetailsPanel(width, panelHeight int) string {
 }
 
 func (m model) renderStatusBar() string {
-	// Container style for status bar
-	statusStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		Background(lipgloss.Color("235")).
-		Padding(0, 1).
-		Width(m.width)
-
 	// Inline styles for colored text (like scout)
 	orangeStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("214")).
-		Background(lipgloss.Color("235")).
 		Bold(true).
 		Inline(true)
 
 	whiteStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("255")).
-		Background(lipgloss.Color("235")).
 		Inline(true)
 
 	var statusText string
 	var rightSide string
+	actions := func(items ...suitechrome.Action) string {
+		return suitechrome.RenderActions(items)
+	}
 
 	// Mode-specific status
 	switch m.mode {
@@ -267,42 +253,51 @@ func (m model) renderStatusBar() string {
 		}
 
 		statusText = orangeStyle.Render(prefix+" "+colName+": ") + whiteStyle.Render(m.textInput.View())
-		rightSide = orangeStyle.Render("tab") + whiteStyle.Render(": next | ") +
-			orangeStyle.Render("enter") + whiteStyle.Render(": save | ") +
-			orangeStyle.Render("esc") + whiteStyle.Render(": cancel")
+		rightSide = actions(
+			suitechrome.Action{Key: "tab", Label: "next"},
+			suitechrome.Action{Key: "enter", Label: "save"},
+			suitechrome.Action{Key: "esc", Label: "cancel"},
+		)
 
 	case ModeFileEdit:
 		statusText = orangeStyle.Render("Editing file inline: ") + whiteStyle.Render(m.fileEditLabel)
-		rightSide = orangeStyle.Render("ctrl+s") + whiteStyle.Render(": save | ") +
-			orangeStyle.Render("ctrl+d") + whiteStyle.Render(": del line | ") +
-			orangeStyle.Render("esc") + whiteStyle.Render(": cancel")
+		rightSide = actions(
+			suitechrome.Action{Key: "ctrl+s", Label: "save"},
+			suitechrome.Action{Key: "ctrl+d", Label: "del line"},
+			suitechrome.Action{Key: "esc", Label: "cancel"},
+		)
 
 	case ModeSearch:
 		matchCount := m.getFilteredConfigsCount()
 		statusText = orangeStyle.Render("🔍 Search: ") + whiteStyle.Render(m.searchInput.View())
-		rightSide = whiteStyle.Render(fmt.Sprintf("%d matches | ", matchCount)) +
-			orangeStyle.Render("enter") + whiteStyle.Render(": apply | ") +
-			orangeStyle.Render("esc") + whiteStyle.Render(": cancel")
+		rightSide = whiteStyle.Render(fmt.Sprintf("%d matches  ", matchCount)) +
+			actions(
+				suitechrome.Action{Key: "enter", Label: "apply"},
+				suitechrome.Action{Key: "esc", Label: "cancel"},
+			)
 
 	case ModeHelp:
 		statusText = orangeStyle.Render("Help")
 		if maxScroll := m.maxHelpScroll(); maxScroll > 0 {
 			statusText += whiteStyle.Render(fmt.Sprintf(" | line %d/%d", m.helpScroll+1, maxScroll+1))
 		}
-		rightSide = orangeStyle.Render("j/k") + whiteStyle.Render(": scroll | ") +
-			orangeStyle.Render("pgup/pgdn") + whiteStyle.Render(": page | ") +
-			orangeStyle.Render("g/G") + whiteStyle.Render(": top/bottom | ") +
-			orangeStyle.Render("esc/?/q") + whiteStyle.Render(": close")
+		rightSide = actions(
+			suitechrome.Action{Key: "j/k", Label: "scroll"},
+			suitechrome.Action{Key: "pgup/pgdn", Label: "page"},
+			suitechrome.Action{Key: "g/G", Label: "top/bottom"},
+			suitechrome.Action{Key: "esc/?/q", Label: "close"},
+		)
 
 	case ModeConfirmDelete:
 		statusText = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("196")).
-			Background(lipgloss.Color("235")).
 			Bold(true).
 			Inline(true).
 			Render(fmt.Sprintf("🗑️  Delete '%s'? ", m.configs[m.deleteIndex].Name))
-		rightSide = orangeStyle.Render("y") + whiteStyle.Render(": yes | ") +
-			orangeStyle.Render("n/esc") + whiteStyle.Render(": no")
+		rightSide = actions(
+			suitechrome.Action{Key: "y", Label: "yes"},
+			suitechrome.Action{Key: "n/esc", Label: "no"},
+		)
 
 	default:
 		// File count
@@ -338,24 +333,28 @@ func (m model) renderStatusBar() string {
 			Bold(true).
 			Inline(true)
 
-		rightSide = greenStyle.Render("o") + whiteStyle.Render(": open | ") +
-			greenStyle.Render("E") + whiteStyle.Render(": inline | ") +
-			orangeStyle.Render("e") + whiteStyle.Render(": meta | ") +
-			orangeStyle.Render("J/K") + whiteStyle.Render(": preview | ") +
-			orangeStyle.Render("N") + whiteStyle.Render(": add | ") +
-			redStyle.Render("D") + whiteStyle.Render(": del | ") +
-			orangeStyle.Render("y") + whiteStyle.Render(": copy | ") +
-			orangeStyle.Render("?") + whiteStyle.Render(": help")
+		_ = greenStyle
+		_ = redStyle
+		rightSide = actions(
+			suitechrome.Action{Key: "o", Label: "open"},
+			suitechrome.Action{Key: "E", Label: "inline"},
+			suitechrome.Action{Key: "e", Label: "meta"},
+			suitechrome.Action{Key: "J/K", Label: "preview"},
+			suitechrome.Action{Key: "N", Label: "add"},
+			suitechrome.Action{Key: "D", Label: "del"},
+			suitechrome.Action{Key: "y", Label: "copy"},
+			suitechrome.Action{Key: "?", Label: "help"},
+		)
 	}
 
 	totalWidth := m.width - 2
-	padding := totalWidth - lipgloss.Width(statusText) - lipgloss.Width(rightSide) - 3
-	if padding < 1 {
-		padding = 1
+	if lipgloss.Width(statusText)+lipgloss.Width(rightSide)+2 > totalWidth {
+		rightSide = actions(suitechrome.Action{Key: "?", Label: "help"})
+		if lipgloss.Width(statusText)+lipgloss.Width(rightSide)+2 > totalWidth {
+			rightSide = ""
+		}
 	}
-	statusText += whiteStyle.Render(strings.Repeat(" ", padding)) + rightSide
-
-	return statusStyle.Render(statusText)
+	return suitechrome.JoinLine(m.width, statusText, rightSide)
 }
 
 // truncate truncates a string to maxLen, adding "..." if truncated
