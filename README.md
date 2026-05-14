@@ -6,19 +6,29 @@ Personal file registry for the terminal. `zap` lets you register important files
 
 **Live demo:** [froesch.dev](https://froesch.dev)
 
+## Release Status
+
+Developed for WSL2/Linux first. Cross-platform testing and bug fixing for macOS and native Windows are still in progress.
+
+Linux, WSL2, and macOS are the primary targets today. Windows binaries and installer entrypoints are available, but native Windows should still be treated as experimental.
+
 ## Install
 
-Supported platforms: Linux and macOS.
-
-Windows release binaries and installer entrypoints are shipped, but native Windows support is unverified.
-
-Recommended:
+Quick install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LFroesch/zap/main/install.sh | bash
 ```
 
-Windows:
+Experimental native Windows install:
+
+```powershell
+irm https://raw.githubusercontent.com/LFroesch/zap/main/install.ps1 | iex
+```
+
+Direct installers: [`install.sh`](https://raw.githubusercontent.com/LFroesch/zap/main/install.sh), [`install.ps1`](https://raw.githubusercontent.com/LFroesch/zap/main/install.ps1)
+
+If you cloned the repo already:
 
 ```powershell
 ./install.ps1
@@ -51,6 +61,20 @@ Registered files are saved in:
 ```
 
 `zap` does not move or copy your files. It only stores metadata and paths.
+
+Path resolution order:
+
+```text
+$ZAP_REGISTRY_PATH -> $XDG_CONFIG_HOME/zap/zap-registry.json -> ~/.config/zap/zap-registry.json
+```
+
+Optional demo fallback:
+
+```text
+$ZAP_DEMO_DATA_PATH
+```
+
+If the primary registry file does not exist yet and `ZAP_DEMO_DATA_PATH` points at a valid registry JSON file, `zap` loads that seeded data for the session while still saving future edits to the primary registry path.
 
 ## Features
 

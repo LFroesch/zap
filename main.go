@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/LFroesch/zap/internal/storage"
 
@@ -30,14 +29,13 @@ func main() {
 		os.Exit(0)
 	}
 
-	homeDir, err := os.UserHomeDir()
+	configFile, err := resolveRegistryPath()
 	if err != nil {
 		log.Fatal(err)
 	}
-	configFile := filepath.Join(homeDir, ".config", "zap", "zap-registry.json")
 
 	store := storage.New(configFile)
-	configs, err := store.Load()
+	configs, err := loadConfigs(store)
 	if err != nil {
 		log.Fatalf("Failed to load configs: %v", err)
 	}
